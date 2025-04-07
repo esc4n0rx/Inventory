@@ -89,41 +89,106 @@ class RegionalProgressWidget(QWidget):
         """Atualiza a tabela com os dados de progresso por regional"""
         self.table.setRowCount(0)
         
-        for i, regional in enumerate(dados_regionais):
-            self.table.insertRow(i)
+        # Verificar se temos dados_regionais válidos
+        if not dados_regionais:
+            print("Aviso: dados_regionais está vazio")
+            return
             
-            # Regional - Nome mais visível com estilo em negrito
-            item_regional = QTableWidgetItem(regional['regional'])
+        # Separar CDs e regionais normais
+        regionais_normais = []
+        regionais_cd = []
+        
+        for regional in dados_regionais:
+            if regional.get('regional') == 'CENTRO_DISTRIBUICAO':
+                regionais_cd.append(regional)
+            else:
+                regionais_normais.append(regional)
+        
+        # Adicionar CDs primeiro
+        row_index = 0
+        for regional in regionais_cd:
+            self._adicionar_linha_regional(regional, row_index, True)
+            row_index += 1
+        
+        # Adicionar regionais normais
+        for regional in regionais_normais:
+            self._adicionar_linha_regional(regional, row_index, False)
+            row_index += 1
+
+    def _adicionar_linha_regional(self, regional, row_index, is_cd):
+        """Adiciona uma linha na tabela para a regional ou CD"""
+        try:
+            self.table.insertRow(row_index)
+            
+            # Regional - Nome mais visível com estilo específico
+            regional_name = regional.get('regional', '')
+            item_regional = QTableWidgetItem(
+                f"🏢 {regional_name}" if is_cd else regional_name
+            )
+            
             font = item_regional.font()
             font.setBold(True)
             item_regional.setFont(font)
-            self.table.setItem(i, 0, item_regional)
+            
+            # Destacar CDs com cor diferente
+            if is_cd:
+                item_regional.setForeground(QColor(41, 128, 185))  # Azul mais brilhante para CDs
+            
+            self.table.setItem(row_index, 0, item_regional)
             
             # Lojas concluídas
-            self.table.setItem(i, 1, QTableWidgetItem(str(regional['lojas_finalizadas'])))
+            lojas_finalizadas = regional.get('lojas_finalizadas', 0)
+            item_concluidas = QTableWidgetItem(str(lojas_finalizadas))
+            if is_cd:
+                item_concluidas.setForeground(QColor(41, 128, 185))
+            self.table.setItem(row_index, 1, item_concluidas)
             
             # Total de lojas
-            self.table.setItem(i, 2, QTableWidgetItem(str(regional['total_lojas'])))
+            total_lojas = regional.get('total_lojas', 0)
+            item_total = QTableWidgetItem(str(total_lojas))
+            if is_cd:
+                item_total.setForeground(QColor(41, 128, 185))
+            self.table.setItem(row_index, 2, item_total)
+            
+            # Calcular porcentagem
+            porcentagem = 0
+            if 'porcentagem' in regional:
+                porcentagem = regional['porcentagem']
+            elif total_lojas > 0:
+                porcentagem = (lojas_finalizadas / total_lojas) * 100
             
             # Barra de progresso com texto mais visível
             progress_bar = QProgressBar()
             progress_bar.setMinimum(0)
             progress_bar.setMaximum(100)
-            progress_bar.setValue(int(regional['porcentagem']))
+            progress_bar.setValue(int(porcentagem))
             progress_bar.setFormat("%v%")  # Mostrar valor com percentual
             progress_bar.setAlignment(Qt.AlignCenter)
             
-            # Alterar cor da barra de progresso baseado no percentual
+            # Alterar cor da barra de progresso baseado no percentual e tipo
             stylesheet = ""
-            if regional['porcentagem'] < 30:
-                stylesheet = "QProgressBar::chunk { background-color: #FF6666; }"  # Vermelho claro
-            elif regional['porcentagem'] < 70:
-                stylesheet = "QProgressBar::chunk { background-color: #FFCC66; }"  # Amarelo
+            if is_cd:
+                # Paleta especial para CDs
+                if porcentagem < 30:
+                    stylesheet = "QProgressBar::chunk { background-color: #3498db; }"  # Azul claro
+                elif porcentagem < 70:
+                    stylesheet = "QProgressBar::chunk { background-color: #2980b9; }"  # Azul médio
+                else:
+                    stylesheet = "QProgressBar::chunk { background-color: #1c6ea4; }"  # Azul escuro
             else:
-                stylesheet = "QProgressBar::chunk { background-color: #66CC66; }"  # Verde claro
+                # Paleta normal para lojas
+                if porcentagem < 30:
+                    stylesheet = "QProgressBar::chunk { background-color: #FF6666; }"  # Vermelho claro
+                elif porcentagem < 70:
+                    stylesheet = "QProgressBar::chunk { background-color: #FFCC66; }"  # Amarelo
+                else:
+                    stylesheet = "QProgressBar::chunk { background-color: #66CC66; }"  # Verde claro
             
             progress_bar.setStyleSheet(stylesheet)
-            self.table.setCellWidget(i, 3, progress_bar)
+            self.table.setCellWidget(row_index, 3, progress_bar)
+            
+        except Exception as e:
+            print(f"Erro ao adicionar linha regional: {e}")
 
 class LojasPendentesWidget(QWidget):
     """Widget para exibir lojas pendentes por regional"""
@@ -170,23 +235,49 @@ class LojasPendentesWidget(QWidget):
         for regional, lojas in lojas_pendentes.items():
             if not lojas:  # Pular regionais sem lojas pendentes
                 continue
-                
+            
+            # Verificar se é a regional especial para CDs
+            is_cd_regional = regional == 'CENTRO_DISTRIBUICAO'
+            
             # Criar grupo para a regional com estilo compacto
-            group = QGroupBox(f"{regional} ({len(lojas)})")
-            group.setStyleSheet("""
-                QGroupBox {
-                    font-weight: bold;
-                    border: 1px solid #CCCCCC;
-                    border-radius: 3px;
-                    margin-top: 5px;
-                    padding-top: 10px;
-                }
-                QGroupBox::title {
-                    subcontrol-origin: margin;
-                    left: 10px;
-                    padding: 0 3px;
-                }
-            """)
+            group_title = "CENTROS DE DISTRIBUIÇÃO" if is_cd_regional else regional
+            count_suffix = f" ({len(lojas)})"
+            
+            group = QGroupBox(f"{group_title}{count_suffix}")
+            
+            # Estilo especial para CDs
+            if is_cd_regional:
+                group.setStyleSheet("""
+                    QGroupBox {
+                        font-weight: bold;
+                        border: 1px solid #2980b9;
+                        background-color: #ecf0f1;
+                        border-radius: 3px;
+                        margin-top: 5px;
+                        padding-top: 10px;
+                    }
+                    QGroupBox::title {
+                        subcontrol-origin: margin;
+                        left: 10px;
+                        padding: 0 3px;
+                        color: #2980b9;
+                    }
+                """)
+            else:
+                group.setStyleSheet("""
+                    QGroupBox {
+                        font-weight: bold;
+                        border: 1px solid #CCCCCC;
+                        border-radius: 3px;
+                        margin-top: 5px;
+                        padding-top: 10px;
+                    }
+                    QGroupBox::title {
+                        subcontrol-origin: margin;
+                        left: 10px;
+                        padding: 0 3px;
+                    }
+                """)
             
             # Layout mais compacto para o grupo
             group_layout = QVBoxLayout(group)
@@ -195,8 +286,17 @@ class LojasPendentesWidget(QWidget):
             
             # Adicionar lista de lojas em formato compacto
             for loja in lojas:
-                loja_label = QLabel(loja)
-                loja_label.setStyleSheet("padding: 1px 3px;")  # Padding mínimo
+                # Ícone especial para CDs
+                prefix = "🏢 " if "CD " in loja else ""
+                
+                loja_label = QLabel(f"{prefix}{loja}")
+                
+                # Estilo especial para CDs
+                if "CD " in loja:
+                    loja_label.setStyleSheet("font-weight: bold; color: #2980b9; padding: 1px 3px;")
+                else:
+                    loja_label.setStyleSheet("padding: 1px 3px;")  # Padding mínimo
+                    
                 group_layout.addWidget(loja_label)
             
             self.scroll_layout.addWidget(group)
@@ -345,12 +445,18 @@ class DistribuicaoWidget(QWidget):
         series = QPieSeries()
         
         # Adicionar fatias para cada origem
+        # Modificado para separar os dados de trânsito por origem
         origens = {
             'Lojas': totais['total_lojas'],
-            'CD': totais['total_cd'],
-            'Trânsito': totais['total_transito'],
+            'CDs': totais['total_cd'],
+            'Trânsito SP': totais.get('total_transito_sp', 0),
+            'Trânsito ES': totais.get('total_transito_es', 0),
+            'Trânsito RJ': totais.get('total_transito_rj', 0),
             'Fornecedor': totais['total_fornecedor']
         }
+        
+        # Remover origens com valor zero
+        origens = {k: v for k, v in origens.items() if v > 0}
         
         # Calcular porcentagens
         total_geral = totais['total_geral'] if totais['total_geral'] > 0 else 1
@@ -358,8 +464,10 @@ class DistribuicaoWidget(QWidget):
         # Cores personalizadas para cada origem
         cores = {
             'Lojas': QColor(52, 152, 219),      # Azul
-            'CD': QColor(46, 204, 113),         # Verde
-            'Trânsito': QColor(155, 89, 182),   # Roxo
+            'CDs': QColor(46, 204, 113),         # Verde
+            'Trânsito SP': QColor(155, 89, 182),   # Roxo
+            'Trânsito ES': QColor(142, 68, 173),   # Roxo mais escuro
+            'Trânsito RJ': QColor(175, 122, 197),  # Roxo mais claro
             'Fornecedor': QColor(241, 196, 15)  # Amarelo
         }
         
@@ -499,6 +607,29 @@ class DashboardWidget(QWidget):
         # Obter dados do dashboard
         dados = self.relatorio_service.get_dados_dashboard(cod_inventario)
         
+        # Processar os dados de trânsito para separar por origem
+        # Adicionar totais separados para cada origem de trânsito
+        totais = dados['totais']
+        
+        # Inicializar os novos totais de trânsito
+        totais['total_transito_sp'] = 0
+        totais['total_transito_es'] = 0
+        totais['total_transito_rj'] = 0
+        
+        # Obter detalhes de trânsito por tipo (se disponíveis)
+        # Nota: isso requer que o relatorio_service retorne esses dados
+        if 'dados_transito' in dados:
+            for item in dados['dados_transito']:
+                setor = item.get('setor', '').upper()
+                quantidade = item.get('total', 0)
+                
+                if 'TRÂNSITO SP' in setor or 'TRANSITO SP' in setor:
+                    totais['total_transito_sp'] += quantidade
+                elif 'TRÂNSITO ES' in setor or 'TRANSITO ES' in setor:
+                    totais['total_transito_es'] += quantidade
+                elif 'TRÂNSITO RJ' in setor or 'TRANSITO RJ' in setor:
+                    totais['total_transito_rj'] += quantidade
+        
         # Atualizar cards
         self.atualizar_cards(dados)
         
@@ -509,12 +640,16 @@ class DashboardWidget(QWidget):
         lojas_pendentes = {}
         for regional in dados['status']['resumo_regional']:
             if regional['lojas_pendentes']:
-                lojas_pendentes[regional['regional']] = regional['lojas_pendentes']
+                # Agrupar CDs em uma categoria especial
+                if regional['regional'] == 'CENTRO_DISTRIBUICAO':
+                    lojas_pendentes['CENTRO_DISTRIBUICAO'] = regional['lojas_pendentes']
+                else:
+                    lojas_pendentes[regional['regional']] = regional['lojas_pendentes']
         
         self.lojas_pendentes.atualizar_dados(lojas_pendentes)
         
         # Atualizar gráfico de comparação
         self.comparacao_widget.atualizar_dados(dados['comparacao'])
         
-        # Atualizar gráfico de distribuição
-        self.distribuicao_widget.atualizar_dados(dados['totais'])
+        # Atualizar gráfico de distribuição com os dados processados
+        self.distribuicao_widget.atualizar_dados(totais)

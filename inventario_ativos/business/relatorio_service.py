@@ -9,7 +9,7 @@ class RelatorioService:
         self.db_manager = db_manager
     
     def get_totais_por_tipo(self, cod_inventario):
-        """Retorna os totais de cada tipo de caixa no inventário"""
+        """Retorna os totais de cada tipo de caixa no inventário com separação por origem correta"""
         dados = self.db_manager.get_dados_inventario_atual(cod_inventario)
         
         tipos_caixa = [
@@ -19,50 +19,175 @@ class RelatorioService:
         
         resultado = {}
         
-        # Totais de lojas
-        for tipo in tipos_caixa:
-            resultado[f'lojas_{tipo}'] = dados['dados_lojas'].get(f'total_{tipo}', 0) or 0
+        # Inicializar todos os totais com zero para evitar valores None
+        for prefixo in ['cd_sp_', 'cd_es_', 'cd_rj_', 'lojas_', 'transito_sp_', 'transito_es_', 'transito_rj_', 'fornecedor_', 'total_']:
+            for tipo in tipos_caixa:
+                resultado[f'{prefixo}{tipo}'] = 0
         
-        # Totais de CD
-        for tipo in tipos_caixa:
-            resultado[f'cd_{tipo}'] = dados['dados_cd'].get(f'total_{tipo}', 0) or 0
+        # Obter conexão para consultas mais detalhadas
+        conn = self.db_manager.get_connection()
+        cursor = conn.cursor()
         
-        # Totais de trânsito
-        transito_dict = {item['tipo_caixa']: item['total'] for item in dados['dados_transito']}
-        for tipo in tipos_caixa:
-            resultado[f'transito_{tipo}'] = transito_dict.get(tipo, 0) or 0
+        # --- PROCESSAMENTO DAS LOJAS ---
+        # Obter todas as lojas (excluindo CDs)
+        cursor.execute('''
+        SELECT loja, caixa_hb_623, caixa_hb_618, caixa_hnt_g, caixa_hnt_p, 
+            caixa_chocolate, caixa_bin, pallets_pbr
+        FROM contagem_lojas
+        WHERE cod_inventario = ? AND loja NOT LIKE 'CD %'
+        ''', (cod_inventario,))
         
-        # Totais de fornecedor
-        fornecedor_dict = {item['tipo_caixa']: item['total'] for item in dados['dados_fornecedor']}
-        for tipo in tipos_caixa:
-            resultado[f'fornecedor_{tipo}'] = fornecedor_dict.get(tipo, 0) or 0
+        lojas = cursor.fetchall()
         
-        # Calcular totais gerais por tipo
+        # Somar por tipo de caixa
+        for loja in lojas:
+            resultado['lojas_hb_623'] += loja['caixa_hb_623'] or 0
+            resultado['lojas_hb_618'] += loja['caixa_hb_618'] or 0
+            resultado['lojas_hnt_g'] += loja['caixa_hnt_g'] or 0
+            resultado['lojas_hnt_p'] += loja['caixa_hnt_p'] or 0
+            resultado['lojas_chocolate'] += loja['caixa_chocolate'] or 0
+            resultado['lojas_bin'] += loja['caixa_bin'] or 0
+            resultado['lojas_pallets_pbr'] += loja['pallets_pbr'] or 0
+        
+        # --- PROCESSAMENTO DOS CDs a partir da tabela contagem_lojas (para CDs específicos) ---
+        # CD SP
+        cursor.execute('''
+        SELECT loja, caixa_hb_623, caixa_hb_618, caixa_hnt_g, caixa_hnt_p, 
+            caixa_chocolate, caixa_bin, pallets_pbr
+        FROM contagem_lojas
+        WHERE cod_inventario = ? AND loja = 'CD SP'
+        ''', (cod_inventario,))
+        
+        cd_sp = cursor.fetchone()
+        if cd_sp:
+            resultado['cd_sp_hb_623'] += cd_sp['caixa_hb_623'] or 0
+            resultado['cd_sp_hb_618'] += cd_sp['caixa_hb_618'] or 0
+            resultado['cd_sp_hnt_g'] += cd_sp['caixa_hnt_g'] or 0
+            resultado['cd_sp_hnt_p'] += cd_sp['caixa_hnt_p'] or 0
+            resultado['cd_sp_chocolate'] += cd_sp['caixa_chocolate'] or 0
+            resultado['cd_sp_bin'] += cd_sp['caixa_bin'] or 0
+            resultado['cd_sp_pallets_pbr'] += cd_sp['pallets_pbr'] or 0
+        
+        # CD ES
+        cursor.execute('''
+        SELECT loja, caixa_hb_623, caixa_hb_618, caixa_hnt_g, caixa_hnt_p, 
+            caixa_chocolate, caixa_bin, pallets_pbr
+        FROM contagem_lojas
+        WHERE cod_inventario = ? AND loja = 'CD ES'
+        ''', (cod_inventario,))
+        
+        cd_es = cursor.fetchone()
+        if cd_es:
+            resultado['cd_es_hb_623'] += cd_es['caixa_hb_623'] or 0
+            resultado['cd_es_hb_618'] += cd_es['caixa_hb_618'] or 0
+            resultado['cd_es_hnt_g'] += cd_es['caixa_hnt_g'] or 0
+            resultado['cd_es_hnt_p'] += cd_es['caixa_hnt_p'] or 0
+            resultado['cd_es_chocolate'] += cd_es['caixa_chocolate'] or 0
+            resultado['cd_es_bin'] += cd_es['caixa_bin'] or 0
+            resultado['cd_es_pallets_pbr'] += cd_es['pallets_pbr'] or 0
+        
+        # --- PROCESSAMENTO DOS SETORES DO CD (tabela contagem_cd) ---
+        # Somamos todos os setores como CD RJ
+        cursor.execute('''
+        SELECT setor, caixa_hb_623, caixa_hb_618, caixa_hnt_g, caixa_hnt_p, 
+            caixa_chocolate, caixa_bin, pallets_pbr
+        FROM contagem_cd
+        WHERE cod_inventario = ?
+        ''', (cod_inventario,))
+        
+        setores = cursor.fetchall()
+        
+        # Somar por tipo de caixa
+        for setor in setores:
+            resultado['cd_rj_hb_623'] += setor['caixa_hb_623'] or 0
+            resultado['cd_rj_hb_618'] += setor['caixa_hb_618'] or 0
+            resultado['cd_rj_hnt_g'] += setor['caixa_hnt_g'] or 0
+            resultado['cd_rj_hnt_p'] += setor['caixa_hnt_p'] or 0
+            resultado['cd_rj_chocolate'] += setor['caixa_chocolate'] or 0
+            resultado['cd_rj_bin'] += setor['caixa_bin'] or 0
+            resultado['cd_rj_pallets_pbr'] += setor['pallets_pbr'] or 0
+        
+        # --- PROCESSAMENTO DOS DADOS EM TRÂNSITO ---
+        # Consultar dados de trânsito separados por CD
+        cursor.execute('''
+        SELECT setor, tipo_caixa, SUM(quantidade) as total
+        FROM dados_transito
+        WHERE cod_inventario = ?
+        GROUP BY setor, tipo_caixa
+        ''', (cod_inventario,))
+        
+        # Processar resultados separando por origem
+        for row in cursor.fetchall():
+            setor = row['setor'] or ''
+            tipo_caixa = row['tipo_caixa']
+            quantidade = row['total'] or 0
+            
+            # Mapear para as chaves específicas no resultado
+            if 'SP' in setor:
+                resultado[f'transito_sp_{tipo_caixa}'] += quantidade
+            elif 'ES' in setor:
+                resultado[f'transito_es_{tipo_caixa}'] += quantidade
+            elif 'RJ' in setor:
+                resultado[f'transito_rj_{tipo_caixa}'] += quantidade
+            else:
+                # Se não encaixar em nenhum CD específico, dividir igualmente entre os três
+                # Isso pode ser ajustado conforme a regra de negócio
+                resultado[f'transito_sp_{tipo_caixa}'] += quantidade / 3
+                resultado[f'transito_es_{tipo_caixa}'] += quantidade / 3
+                resultado[f'transito_rj_{tipo_caixa}'] += quantidade / 3
+        
+        # --- PROCESSAMENTO DOS DADOS DE FORNECEDOR ---
+        # Obter totais dos fornecedores do banco
+        cursor.execute('''
+        SELECT tipo_caixa, SUM(quantidade) as total
+        FROM dados_fornecedor
+        WHERE cod_inventario = ?
+        GROUP BY tipo_caixa
+        ''', (cod_inventario,))
+        
+        for row in cursor.fetchall():
+            tipo_caixa = row['tipo_caixa']
+            resultado[f'fornecedor_{tipo_caixa}'] = row['total'] or 0
+        
+        # --- CALCULAR TOTAIS GERAIS ---
+        # Calcular totais por tipo
         for tipo in tipos_caixa:
-            total = (
+            total_tipo = (
                 resultado[f'lojas_{tipo}'] + 
-                resultado[f'cd_{tipo}'] + 
-                resultado[f'transito_{tipo}'] + 
+                resultado[f'cd_sp_{tipo}'] + 
+                resultado[f'cd_es_{tipo}'] + 
+                resultado[f'cd_rj_{tipo}'] + 
+                resultado[f'transito_sp_{tipo}'] + 
+                resultado[f'transito_es_{tipo}'] + 
+                resultado[f'transito_rj_{tipo}'] + 
                 resultado[f'fornecedor_{tipo}']
             )
-            resultado[f'total_{tipo}'] = total
+            resultado[f'total_{tipo}'] = total_tipo
         
         # Calcular totais por origem
         resultado['total_lojas'] = sum(resultado[f'lojas_{tipo}'] for tipo in tipos_caixa)
-        resultado['total_cd'] = sum(resultado[f'cd_{tipo}'] for tipo in tipos_caixa)
-        resultado['total_transito'] = sum(resultado[f'transito_{tipo}'] for tipo in tipos_caixa)
+        resultado['total_cd_sp'] = sum(resultado[f'cd_sp_{tipo}'] for tipo in tipos_caixa)
+        resultado['total_cd_es'] = sum(resultado[f'cd_es_{tipo}'] for tipo in tipos_caixa)
+        resultado['total_cd_rj'] = sum(resultado[f'cd_rj_{tipo}'] for tipo in tipos_caixa)
+        resultado['total_transito_sp'] = sum(resultado[f'transito_sp_{tipo}'] for tipo in tipos_caixa)
+        resultado['total_transito_es'] = sum(resultado[f'transito_es_{tipo}'] for tipo in tipos_caixa)
+        resultado['total_transito_rj'] = sum(resultado[f'transito_rj_{tipo}'] for tipo in tipos_caixa)
         resultado['total_fornecedor'] = sum(resultado[f'fornecedor_{tipo}'] for tipo in tipos_caixa)
         
         # Total geral
         resultado['total_geral'] = (
             resultado['total_lojas'] + 
-            resultado['total_cd'] + 
-            resultado['total_transito'] + 
+            resultado['total_cd_sp'] + 
+            resultado['total_cd_es'] + 
+            resultado['total_cd_rj'] + 
+            resultado['total_transito_sp'] + 
+            resultado['total_transito_es'] + 
+            resultado['total_transito_rj'] + 
             resultado['total_fornecedor']
         )
         
         return resultado
-    
+        
 
     def get_resumo_status(self, cod_inventario):
         """Retorna um resumo do status do inventário"""
@@ -320,7 +445,7 @@ class RelatorioService:
         return resultados
     
     def get_dados_dashboard(self, cod_inventario):
-        """Retorna os dados para o dashboard"""
+        """Retorna os dados para o dashboard com informações detalhadas de cada origem"""
         # Obter dados básicos
         totais = self.get_totais_por_tipo(cod_inventario)
         status = self.get_resumo_status(cod_inventario)
@@ -365,9 +490,59 @@ class RelatorioService:
                 meta['duracao'] = f"{duracao.days} dias, {horas}h {minutos}m"
                 meta['data_fim'] = data_fim.strftime('%d/%m/%Y %H:%M')
         
+        # Obter detalhes de dados de lojas, CDs, e trânsito para a interface de finalização
+        
+        # 1. Detalhes das lojas
+        cursor.execute('''
+        SELECT loja, regional, status,
+            caixa_hb_623, caixa_hb_618, caixa_hnt_g, caixa_hnt_p, 
+            caixa_chocolate, caixa_bin, pallets_pbr
+        FROM contagem_lojas
+        WHERE cod_inventario = ?
+        ''', (cod_inventario,))
+        
+        lojas_detalhes = [dict(row) for row in cursor.fetchall()]
+        
+        # 2. Detalhes dos CDs (tabela contagem_cd)
+        cursor.execute('''
+        SELECT setor, status,
+            caixa_hb_623, caixa_hb_618, caixa_hnt_g, caixa_hnt_p, 
+            caixa_chocolate, caixa_bin, pallets_pbr
+        FROM contagem_cd
+        WHERE cod_inventario = ?
+        ''', (cod_inventario,))
+        
+        cds_detalhes = [dict(row) for row in cursor.fetchall()]
+        
+        # 3. Detalhes de trânsito
+        cursor.execute('''
+        SELECT setor, tipo_caixa, SUM(quantidade) as total
+        FROM dados_transito
+        WHERE cod_inventario = ?
+        GROUP BY setor, tipo_caixa
+        ''', (cod_inventario,))
+        
+        transito_detalhes = [dict(row) for row in cursor.fetchall()]
+        
+        # 4. Detalhes de fornecedor
+        cursor.execute('''
+        SELECT tipo_fornecedor, tipo_caixa, SUM(quantidade) as total
+        FROM dados_fornecedor
+        WHERE cod_inventario = ?
+        GROUP BY tipo_fornecedor, tipo_caixa
+        ''', (cod_inventario,))
+        
+        fornecedor_detalhes = [dict(row) for row in cursor.fetchall()]
+        
         return {
             'meta': meta,
             'totais': totais,
             'status': status,
-            'comparacao': comparacao
+            'comparacao': comparacao,
+            'detalhes': {
+                'lojas': lojas_detalhes,
+                'cds': cds_detalhes,
+                'transito': transito_detalhes,
+                'fornecedor': fornecedor_detalhes
+            }
         }

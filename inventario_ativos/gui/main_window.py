@@ -263,61 +263,79 @@ class MainWindow(QMainWindow):
                     )
     
     def finalizar_inventario(self):
-        """Finaliza o inventário atual"""
+        """Finaliza o inventário atual com os novos requisitos de finalização"""
         if not self.inventario_service.inventario_atual:
             return
         
-        resp = QMessageBox.question(
-            self, 
-            "Finalizar Inventário", 
-            "Tem certeza que deseja finalizar o inventário atual? Esta ação não pode ser desfeita.",
-            QMessageBox.Yes | QMessageBox.No
-        )
+        # Verificar se há algum pendente antes de finalizar
+        pendentes = self._verificar_pendentes()
+        if pendentes and len(pendentes) > 0:
+            # Mostrar diálogo de confirmação com os pendentes
+            resp = QMessageBox.question(
+                self, 
+                "Itens Pendentes", 
+                f"Existem {len(pendentes)} itens pendentes no inventário. Deseja continuar com a finalização?",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            
+            if resp != QMessageBox.Yes:
+                return
         
-        if resp == QMessageBox.Yes:
-            if self.inventario_service.finalizar_inventario_atual():
+        # Criar e exibir o diálogo de finalização
+        try:
+            # Garantir que o módulo esteja importado
+            from gui.finalizar_inventario import FinalizarInventarioDialog
+            
+            dialog = FinalizarInventarioDialog(
+                self.inventario_service,
+                self.relatorio_service,
+                self
+            )
+            
+            if dialog.exec_() == QDialog.Accepted:
+                # O inventário foi finalizado com sucesso
                 QMessageBox.information(
                     self, 
                     "Inventário Finalizado", 
                     "O inventário foi finalizado com sucesso!"
                 )
-                # Oferecer para exportar um relatório final
-                resp = QMessageBox.question(
-                    self, 
-                    "Exportar Relatório", 
-                    "Deseja exportar um relatório final do inventário?",
-                    QMessageBox.Yes | QMessageBox.No
-                )
-                
-                if resp == QMessageBox.Yes:
-                    path, _ = QFileDialog.getSaveFileName(
-                        self, 
-                        "Salvar Relatório", 
-                        f"relatorio_{self.inventario_service.inventario_atual}.csv", 
-                        "Arquivos CSV (*.csv)"
-                    )
-                    
-                    if path:
-                        resultado = self.inventario_service.exportar_relatorio_atual(path)
-                        if resultado['status']:
-                            QMessageBox.information(
-                                self, 
-                                "Relatório Exportado", 
-                                f"Relatório exportado com sucesso para:\n{path}"
-                            )
-                        else:
-                            QMessageBox.warning(
-                                self, 
-                                "Erro", 
-                                f"Erro ao exportar relatório: {resultado['message']}"
-                            )
                 
                 # Resetar interface
                 self.inventario_service.inventario_atual = None
                 self.atualizar_interface()
-            else:
-                QMessageBox.warning(
-                    self, 
-                    "Erro", 
-                    "Não foi possível finalizar o inventário."
-                )
+        except Exception as e:
+            import traceback
+            print(f"Erro ao mostrar diálogo de finalização: {e}")
+            print(traceback.format_exc())
+            QMessageBox.warning(
+                self, 
+                "Erro", 
+                f"Ocorreu um erro ao finalizar o inventário: {str(e)}"
+            )
+
+    def _verificar_pendentes(self):
+        """Verifica se há itens pendentes no inventário atual"""
+        try:
+            conn = self.db_manager.get_connection()
+            cursor = conn.cursor()
+            
+            # Verificar lojas pendentes
+            cursor.execute('''
+            SELECT loja FROM contagem_lojas
+            WHERE cod_inventario = ? AND status != 'finalizado'
+            ''', (self.inventario_service.inventario_atual,))
+            
+            lojas_pendentes = [row['loja'] for row in cursor.fetchall()]
+            
+            # Verificar setores pendentes
+            cursor.execute('''
+            SELECT setor FROM contagem_cd
+            WHERE cod_inventario = ? AND status != 'finalizado'
+            ''', (self.inventario_service.inventario_atual,))
+            
+            setores_pendentes = [row['setor'] for row in cursor.fetchall()]
+            
+            return lojas_pendentes + setores_pendentes
+        except Exception as e:
+            print(f"Erro ao verificar pendentes: {e}")
+            return []

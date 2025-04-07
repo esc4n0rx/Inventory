@@ -118,7 +118,206 @@ class InventarioService:
                 'status': False,
                 'message': f'Erro ao adicionar dados do fornecedor: {str(e)}'
             }
-    
+        
+
+
+    def adicionar_contagem_loja_manual(self, loja, tipo_caixa, quantidade, finalizar=False):
+        """Adiciona ou atualiza contagem manual para uma loja ou CD específico"""
+        if not self.inventario_atual:
+            return {
+                'status': False, 
+                'message': 'Nenhum inventário ativo. Inicie um novo inventário ou carregue um existente.'
+            }
+        
+        try:
+            conn = self.db_manager.get_connection()
+            cursor = conn.cursor()
+            
+            # Verificar se é um CD
+            is_cd = "CD " in loja
+            
+            # Definir a tabela alvo com base no tipo de local
+            if is_cd:
+                # Se for um CD, usar a tabela contagem_cd
+                
+                # Extrair o nome do setor do CD (formato: "CD SP" -> "CD SP")
+                setor = loja
+                
+                # Verificar se o setor já existe no inventário atual
+                cursor.execute('''
+                SELECT * FROM contagem_cd 
+                WHERE setor = ? AND cod_inventario = ?
+                ''', (setor, self.inventario_atual))
+                
+                registro_existente = cursor.fetchone()
+                
+                # Timestamp atual
+                timestamp = datetime.datetime.now().isoformat()
+                
+                if registro_existente:
+                    # O setor já existe, vamos atualizar apenas o valor do tipo de caixa
+                    tipo_coluna = f'caixa_{tipo_caixa}'
+                    
+                    # Se for finalizar, atualizamos o status
+                    status_update = ", status = 'finalizado'" if finalizar else ""
+                    
+                    cursor.execute(f'''
+                    UPDATE contagem_cd 
+                    SET {tipo_coluna} = {tipo_coluna} + ?, 
+                        updated_at = ?
+                        {status_update}
+                    WHERE setor = ? AND cod_inventario = ?
+                    ''', (quantidade, timestamp, setor, self.inventario_atual))
+                    
+                    conn.commit()
+                    
+                    status_msg = " e marcado como finalizado" if finalizar else ""
+                    return {
+                        'status': True,
+                        'message': f'Contagem adicionada com sucesso para o CD {setor}{status_msg}.'
+                    }
+                else:
+                    # O setor não existe, vamos criar um novo registro
+                    # Inicializar todos os tipos com 0
+                    dados_cd = {
+                        'setor': setor,
+                        'data': timestamp,
+                        'caixa_hb_623': 0,
+                        'caixa_hb_618': 0,
+                        'caixa_hnt_g': 0,
+                        'caixa_hnt_p': 0,
+                        'caixa_chocolate': 0,
+                        'caixa_bin': 0,
+                        'pallets_pbr': 0,
+                        'status': 'finalizado' if finalizar else 'pendente',
+                        'usuario': 'sistema'
+                    }
+                    
+                    # Atualizar o valor do tipo específico
+                    dados_cd[f'caixa_{tipo_caixa}'] = quantidade
+                    
+                    # Inserir novo registro
+                    self.db_manager.inserir_contagem_cd(dados_cd, self.inventario_atual)
+                    
+                    status_msg = " e marcado como finalizado" if finalizar else ""
+                    return {
+                        'status': True,
+                        'message': f'Nova contagem criada para o CD {setor}{status_msg}.'
+                    }
+            else:
+                # Caso seja uma loja normal, continuar com o comportamento original
+                
+                # Verificar se a loja já existe no inventário atual
+                cursor.execute('''
+                SELECT * FROM contagem_lojas 
+                WHERE loja = ? AND cod_inventario = ?
+                ''', (loja, self.inventario_atual))
+                
+                loja_existente = cursor.fetchone()
+                
+                # Obter informações da regional da loja
+                regional = ''
+                lojas_csv = self.csv_manager.ler_lojas_csv()
+                for l in lojas_csv:
+                    if l.get('loja') == loja:
+                        regional = l.get('regional', '')
+                        break
+                
+                # Timestamp atual
+                timestamp = datetime.datetime.now().isoformat()
+                
+                if loja_existente:
+                    # A loja já existe, vamos atualizar apenas o valor do tipo de caixa
+                    tipo_coluna = f'caixa_{tipo_caixa}'
+                    
+                    # Se for finalizar, atualizamos o status
+                    status_update = ", status = 'finalizado'" if finalizar else ""
+                    
+                    cursor.execute(f'''
+                    UPDATE contagem_lojas 
+                    SET {tipo_coluna} = {tipo_coluna} + ?, 
+                        updated_at = ?
+                        {status_update}
+                    WHERE loja = ? AND cod_inventario = ?
+                    ''', (quantidade, timestamp, loja, self.inventario_atual))
+                    
+                    conn.commit()
+                    
+                    status_msg = " e marcada como finalizada" if finalizar else ""
+                    return {
+                        'status': True,
+                        'message': f'Contagem adicionada com sucesso para a loja {loja}{status_msg}.'
+                    }
+                else:
+                    # A loja não existe, vamos criar um novo registro
+                    # Inicializar todos os tipos com 0
+                    dados_loja = {
+                        'loja': loja,
+                        'regional': regional,
+                        'setor': 'Geral',
+                        'data': timestamp,
+                        'caixa_hb_623': 0,
+                        'caixa_hb_618': 0,
+                        'caixa_hnt_g': 0,
+                        'caixa_hnt_p': 0,
+                        'caixa_chocolate': 0,
+                        'caixa_bin': 0,
+                        'pallets_pbr': 0,
+                        'status': 'finalizado' if finalizar else 'pendente',
+                        'usuario': 'sistema'
+                    }
+                    
+                    # Atualizar o valor do tipo específico
+                    dados_loja[f'caixa_{tipo_caixa}'] = quantidade
+                    
+                    # Inserir novo registro
+                    self.db_manager.inserir_contagem_loja(dados_loja, self.inventario_atual)
+                    
+                    status_msg = " e marcada como finalizada" if finalizar else ""
+                    return {
+                        'status': True,
+                        'message': f'Nova contagem criada para a loja {loja}{status_msg}.'
+                    }
+        except Exception as e:
+            return {
+                'status': False,
+                'message': f'Erro ao adicionar contagem: {str(e)}'
+            }
+
+    def adicionar_dados_transito_manual(self, tipo_transito, tipo_caixa, quantidade):
+        """Adiciona dados de trânsito manualmente"""
+        if not self.inventario_atual:
+            return {
+                'status': False, 
+                'message': 'Nenhum inventário ativo. Inicie um novo inventário ou carregue um existente.'
+            }
+        
+        try:
+            # Mapear o tipo de trânsito para o formato adequado para o banco de dados
+            # Agora separamos por origem: Trânsito SP, Trânsito ES, Trânsito RJ
+            
+            # Preparar os dados para inserção
+            dados_transito = {
+                'setor': tipo_transito,  # Usamos o tipo exato que foi selecionado
+                'data': datetime.datetime.now().isoformat(),
+                'tipo_caixa': tipo_caixa,
+                'quantidade': quantidade,
+                'usuario': 'sistema'
+            }
+            
+            # Inserir dados no banco usando o método existente
+            self.db_manager.inserir_dados_transito(dados_transito, self.inventario_atual)
+            
+            return {
+                'status': True,
+                'message': f'Dados de {tipo_transito} adicionados com sucesso.'
+            }
+        except Exception as e:
+            return {
+                'status': False,
+                'message': f'Erro ao adicionar dados de trânsito: {str(e)}'
+            }
+        
     def exportar_relatorio_atual(self, output_path=None):
         """Exporta relatório do inventário atual"""
         if not self.inventario_atual:

@@ -3,7 +3,7 @@ import sys
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFormLayout, 
     QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox,
-    QPushButton, QLineEdit, QComboBox, QMessageBox, QSpinBox
+    QPushButton, QLineEdit, QComboBox, QMessageBox, QSpinBox,QTabBar, QTabWidget,QCheckBox
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
@@ -95,104 +95,6 @@ class TabelaResumoWidget(QWidget):
             self.tabela.setItem(i, 8, total_item)
 
 
-class FormularioFornecedorWidget(QWidget):
-    """Widget para adicionar dados de fornecedor"""
-    def __init__(self, inventario_service, parent=None):
-        super().__init__(parent)
-        self.inventario_service = inventario_service
-        
-        # Layout principal
-        layout = QVBoxLayout(self)
-        
-        # Grupo para o formulário
-        grupo = QGroupBox("Adicionar Dados de Fornecedor")
-        form_layout = QFormLayout(grupo)
-        
-        # Campos do formulário
-        self.cb_fornecedor = QComboBox()
-        self.cb_fornecedor.addItems(self.inventario_service.get_tipos_fornecedor())
-        form_layout.addRow("Fornecedor:", self.cb_fornecedor)
-        
-        self.cb_tipo_caixa = QComboBox()
-        self.atualizar_tipos_caixa()
-        form_layout.addRow("Tipo de Caixa:", self.cb_tipo_caixa)
-        
-        self.sp_quantidade = QSpinBox()
-        self.sp_quantidade.setMinimum(0)
-        self.sp_quantidade.setMaximum(999999)
-        form_layout.addRow("Quantidade:", self.sp_quantidade)
-        
-        # Botão para adicionar
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        
-        self.btn_adicionar = QPushButton("Adicionar")
-        self.btn_adicionar.clicked.connect(self.adicionar_dados)
-        btn_layout.addWidget(self.btn_adicionar)
-        
-        form_layout.addRow("", btn_layout)
-        
-        layout.addWidget(grupo)
-        layout.addStretch()
-    
-    def atualizar_tipos_caixa(self):
-        """Atualiza a lista de tipos de caixa"""
-        self.cb_tipo_caixa.clear()
-        
-        # Nomes mais amigáveis para os tipos de caixa
-        nomes_tipos = {
-            "hb_623": "Caixa HB 623",
-            "hb_618": "Caixa HB 618",
-            "hnt_g": "Caixa HNT G",
-            "hnt_p": "Caixa HNT P",
-            "chocolate": "Caixa Chocolate",
-            "bin": "Caixa BIN",
-            "pallets_pbr": "Pallets PBR"
-        }
-        
-        for tipo in self.inventario_service.get_tipo_caixas():
-            self.cb_tipo_caixa.addItem(nomes_tipos.get(tipo, tipo), tipo)
-    
-    def adicionar_dados(self):
-        """Adiciona os dados de fornecedor ao inventário"""
-        tipo_fornecedor = self.cb_fornecedor.currentText()
-        tipo_caixa = self.cb_tipo_caixa.currentData()
-        quantidade = self.sp_quantidade.value()
-        
-        if quantidade <= 0:
-            QMessageBox.warning(
-                self, 
-                "Atenção", 
-                "A quantidade deve ser maior que zero."
-            )
-            return
-        
-        resultado = self.inventario_service.adicionar_dados_fornecedor(
-            tipo_fornecedor, 
-            tipo_caixa, 
-            quantidade
-        )
-        
-        if resultado['status']:
-            QMessageBox.information(
-                self, 
-                "Sucesso", 
-                resultado['message']
-            )
-            
-            # Limpar campos
-            self.sp_quantidade.setValue(0)
-            
-            # Emitir sinal de dados atualizados
-            if hasattr(self.parent(), 'atualizar_dados'):
-                self.parent().atualizar_dados()
-        else:
-            QMessageBox.warning(
-                self, 
-                "Erro", 
-                resultado['message']
-            )
-
 
 class InventarioAtualWidget(QWidget):
     """Widget principal para a aba de Dados do Inventário Atual"""
@@ -207,9 +109,9 @@ class InventarioAtualWidget(QWidget):
         self.tabela_resumo = TabelaResumoWidget()
         layout.addWidget(self.tabela_resumo, 3)  # Peso 3 para a tabela
         
-        # Coluna direita: Formulário para adicionar dados de fornecedor
-        self.formulario_fornecedor = FormularioFornecedorWidget(inventario_service)
-        layout.addWidget(self.formulario_fornecedor, 1)  # Peso 1 para o formulário
+        # Coluna direita: Formulário para adicionar dados
+        self.formulario_widget = FormularioFornecedorWidget(inventario_service)
+        layout.addWidget(self.formulario_widget, 2)  # Peso 2 para o formulário (aumentado para acomodar as novas abas)
     
     def atualizar_dados(self):
         """Atualiza os dados do widget"""
@@ -251,3 +153,336 @@ class InventarioAtualWidget(QWidget):
         
         # Atualizar tabela de resumo
         self.tabela_resumo.atualizar_dados(totais)
+        
+        # Atualizar lista de lojas no formulário (se necessário recarregar)
+        if hasattr(self.formulario_widget, 'atualizar_lista_lojas'):
+            self.formulario_widget.atualizar_lista_lojas()
+
+
+class FormularioFornecedorWidget(QWidget):
+    """Widget para adicionar diversos tipos de dados ao inventário"""
+    def __init__(self, inventario_service, parent=None):
+        super().__init__(parent)
+        self.inventario_service = inventario_service
+        
+        # Layout principal
+        layout = QVBoxLayout(self)
+        
+        # Abas para diferentes tipos de entrada
+        self.tab_widget = QTabWidget()
+        
+        # Tab para fornecedor (atual)
+        self.tab_fornecedor = QWidget()
+        self.setup_tab_fornecedor()
+        self.tab_widget.addTab(self.tab_fornecedor, "Fornecedor")
+        
+        # Tab para contagem manual de lojas
+        self.tab_loja = QWidget()
+        self.setup_tab_loja()
+        self.tab_widget.addTab(self.tab_loja, "Contagem Loja/CD")
+        
+        # Tab para trânsito
+        self.tab_transito = QWidget()
+        self.setup_tab_transito()
+        self.tab_widget.addTab(self.tab_transito, "Trânsito")
+        
+        layout.addWidget(self.tab_widget)
+    
+    def setup_tab_fornecedor(self):
+        """Configura a aba de fornecedor"""
+        # Layout da aba
+        form_layout = QFormLayout(self.tab_fornecedor)
+        
+        # Campos do formulário
+        self.cb_fornecedor = QComboBox()
+        self.cb_fornecedor.addItems(self.inventario_service.get_tipos_fornecedor())
+        form_layout.addRow("Fornecedor:", self.cb_fornecedor)
+        
+        self.cb_tipo_caixa_fornecedor = QComboBox()
+        self.atualizar_tipos_caixa(self.cb_tipo_caixa_fornecedor)
+        form_layout.addRow("Tipo de Caixa:", self.cb_tipo_caixa_fornecedor)
+        
+        self.sp_quantidade_fornecedor = QSpinBox()
+        self.sp_quantidade_fornecedor.setMinimum(0)
+        self.sp_quantidade_fornecedor.setMaximum(999999)
+        form_layout.addRow("Quantidade:", self.sp_quantidade_fornecedor)
+        
+        # Botão para adicionar
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        self.btn_adicionar_fornecedor = QPushButton("Adicionar")
+        self.btn_adicionar_fornecedor.clicked.connect(self.adicionar_dados_fornecedor)
+        btn_layout.addWidget(self.btn_adicionar_fornecedor)
+        
+        form_layout.addRow("", btn_layout)
+    
+    def setup_tab_loja(self):
+        """Configura a aba de contagem manual de lojas e CDs"""
+        # Layout da aba
+        form_layout = QFormLayout(self.tab_loja)
+        
+        # Campo para selecionar a loja
+        self.cb_loja = QComboBox()
+        self.atualizar_lista_lojas()
+        self.cb_loja.currentIndexChanged.connect(self.on_loja_changed)
+        form_layout.addRow("Loja/CD:", self.cb_loja)
+        
+        self.cb_tipo_caixa_loja = QComboBox()
+        self.atualizar_tipos_caixa(self.cb_tipo_caixa_loja)
+        form_layout.addRow("Tipo de Caixa:", self.cb_tipo_caixa_loja)
+        
+        self.sp_quantidade_loja = QSpinBox()
+        self.sp_quantidade_loja.setMinimum(0)
+        self.sp_quantidade_loja.setMaximum(999999)
+        form_layout.addRow("Quantidade:", self.sp_quantidade_loja)
+        
+        # Checkbox para finalizar a contagem
+        self.chk_finalizar_loja = QCheckBox("Marcar como finalizado")
+        form_layout.addRow("", self.chk_finalizar_loja)
+        
+        # Botão para adicionar
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        self.btn_adicionar_loja = QPushButton("Adicionar Contagem")
+        self.btn_adicionar_loja.clicked.connect(self.adicionar_contagem_loja)
+        btn_layout.addWidget(self.btn_adicionar_loja)
+        
+        form_layout.addRow("", btn_layout)
+    
+    def setup_tab_transito(self):
+        """Configura a aba de trânsito"""
+        # Layout da aba
+        form_layout = QFormLayout(self.tab_transito)
+        
+        # Campo para selecionar o tipo de trânsito
+        self.cb_tipo_transito = QComboBox()
+        self.cb_tipo_transito.addItems(["Trânsito SP", "Trânsito ES", "Trânsito RJ"])
+        form_layout.addRow("Tipo de Trânsito:", self.cb_tipo_transito)
+        
+        self.cb_tipo_caixa_transito = QComboBox()
+        self.atualizar_tipos_caixa(self.cb_tipo_caixa_transito)
+        form_layout.addRow("Tipo de Caixa:", self.cb_tipo_caixa_transito)
+        
+        self.sp_quantidade_transito = QSpinBox()
+        self.sp_quantidade_transito.setMinimum(0)
+        self.sp_quantidade_transito.setMaximum(999999)
+        form_layout.addRow("Quantidade:", self.sp_quantidade_transito)
+        
+        # Botão para adicionar
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        self.btn_adicionar_transito = QPushButton("Adicionar em Trânsito")
+        self.btn_adicionar_transito.clicked.connect(self.adicionar_dados_transito)
+        btn_layout.addWidget(self.btn_adicionar_transito)
+        
+        form_layout.addRow("", btn_layout)
+    
+    def on_loja_changed(self, index):
+        """Atualiza a interface quando a loja selecionada é alterada"""
+        loja = self.cb_loja.currentData()
+        # Verificar se é um CD
+        is_cd = loja and ("CD SP" in loja or "CD ES" in loja)
+        
+        # Atualizar texto do botão e checkbox conforme o tipo
+        if is_cd:
+            self.btn_adicionar_loja.setText("Adicionar Contagem CD")
+            self.chk_finalizar_loja.setText("Marcar CD como finalizado")
+        else:
+            self.btn_adicionar_loja.setText("Adicionar Contagem Loja")
+            self.chk_finalizar_loja.setText("Marcar loja como finalizada")
+    
+    def atualizar_tipos_caixa(self, combobox):
+        """Atualiza a lista de tipos de caixa no ComboBox especificado"""
+        combobox.clear()
+        
+        # Nomes mais amigáveis para os tipos de caixa
+        nomes_tipos = {
+            "hb_623": "Caixa HB 623",
+            "hb_618": "Caixa HB 618",
+            "hnt_g": "Caixa HNT G",
+            "hnt_p": "Caixa HNT P",
+            "chocolate": "Caixa Chocolate",
+            "bin": "Caixa BIN",
+            "pallets_pbr": "Pallets PBR"
+        }
+        
+        for tipo in self.inventario_service.get_tipo_caixas():
+            combobox.addItem(nomes_tipos.get(tipo, tipo), tipo)
+    
+    def atualizar_lista_lojas(self):
+        """Atualiza a lista de lojas disponíveis, destacando CDs"""
+        self.cb_loja.clear()
+        
+        try:
+            # Obter lista de lojas do CSV
+            lojas = self.inventario_service.csv_manager.ler_lojas_csv(force_reload=True)
+            
+            # Listas separadas para CDs e lojas normais
+            cds = []
+            lojas_normais = []
+            
+            # Separar CDs das lojas normais
+            for loja in lojas:
+                nome_loja = loja.get('loja', '')
+                regional = loja.get('regional', '')
+                
+                if nome_loja:
+                    if regional == 'CENTRO_DISTRIBUICAO' or nome_loja.startswith('CD '):
+                        cds.append((nome_loja, regional))
+                    else:
+                        lojas_normais.append((nome_loja, regional))
+            
+            # Adicionar CDs primeiro (no topo da lista)
+            for nome, regional in cds:
+                texto = f"🏢 {nome}"
+                self.cb_loja.addItem(texto, nome)
+            
+            # Adicionar um separador se houver CDs e lojas normais
+            if cds and lojas_normais:
+                self.cb_loja.insertSeparator(len(cds))
+            
+            # Adicionar lojas normais
+            for nome, regional in lojas_normais:
+                texto = f"{nome}" if not regional else f"{nome} ({regional})"
+                self.cb_loja.addItem(texto, nome)
+            
+        except Exception as e:
+            print(f"Erro ao carregar lojas: {e}")
+    
+    def adicionar_dados_fornecedor(self):
+        """Adiciona os dados de fornecedor ao inventário"""
+        tipo_fornecedor = self.cb_fornecedor.currentText()
+        tipo_caixa = self.cb_tipo_caixa_fornecedor.currentData()
+        quantidade = self.sp_quantidade_fornecedor.value()
+        
+        if quantidade <= 0:
+            QMessageBox.warning(
+                self, 
+                "Atenção", 
+                "A quantidade deve ser maior que zero."
+            )
+            return
+        
+        resultado = self.inventario_service.adicionar_dados_fornecedor(
+            tipo_fornecedor, 
+            tipo_caixa, 
+            quantidade
+        )
+        
+        if resultado['status']:
+            QMessageBox.information(
+                self, 
+                "Sucesso", 
+                resultado['message']
+            )
+            
+            # Limpar campos
+            self.sp_quantidade_fornecedor.setValue(0)
+            
+            # Emitir sinal de dados atualizados
+            if hasattr(self.parent(), 'atualizar_dados'):
+                self.parent().atualizar_dados()
+        else:
+            QMessageBox.warning(
+                self, 
+                "Erro", 
+                resultado['message']
+            )
+    
+    def adicionar_contagem_loja(self):
+        """Adiciona contagem manual para uma loja específica"""
+        loja = self.cb_loja.currentData()  # Nome da loja armazenado como userData
+        tipo_caixa = self.cb_tipo_caixa_loja.currentData()
+        quantidade = self.sp_quantidade_loja.value()
+        finalizar = self.chk_finalizar_loja.isChecked()
+        
+        if not loja:
+            QMessageBox.warning(
+                self, 
+                "Atenção", 
+                "Selecione uma loja ou CD válido."
+            )
+            return
+        
+        if quantidade <= 0:
+            QMessageBox.warning(
+                self, 
+                "Atenção", 
+                "A quantidade deve ser maior que zero."
+            )
+            return
+        
+        # Verificar se o inventário_service tem um método para esta funcionalidade
+        # Se não, precisaremos implementá-lo
+        resultado = self.inventario_service.adicionar_contagem_loja_manual(
+            loja, 
+            tipo_caixa, 
+            quantidade,
+            finalizar
+        )
+        
+        if resultado['status']:
+            QMessageBox.information(
+                self, 
+                "Sucesso", 
+                resultado['message']
+            )
+            
+            # Limpar campos
+            self.sp_quantidade_loja.setValue(0)
+            self.chk_finalizar_loja.setChecked(False)
+            
+            # Emitir sinal de dados atualizados
+            if hasattr(self.parent(), 'atualizar_dados'):
+                self.parent().atualizar_dados()
+        else:
+            QMessageBox.warning(
+                self, 
+                "Erro", 
+                resultado['message']
+            )
+    
+    def adicionar_dados_transito(self):
+        """Adiciona dados de trânsito ao inventário"""
+        tipo_transito = self.cb_tipo_transito.currentText()
+        tipo_caixa = self.cb_tipo_caixa_transito.currentData()
+        quantidade = self.sp_quantidade_transito.value()
+        
+        if quantidade <= 0:
+            QMessageBox.warning(
+                self, 
+                "Atenção", 
+                "A quantidade deve ser maior que zero."
+            )
+            return
+        
+        # Verificar se o inventário_service tem um método para esta funcionalidade
+        # Se não, precisaremos implementá-lo
+        resultado = self.inventario_service.adicionar_dados_transito_manual(
+            tipo_transito,
+            tipo_caixa, 
+            quantidade
+        )
+        
+        if resultado['status']:
+            QMessageBox.information(
+                self, 
+                "Sucesso", 
+                resultado['message']
+            )
+            
+            # Limpar campos
+            self.sp_quantidade_transito.setValue(0)
+            
+            # Emitir sinal de dados atualizados
+            if hasattr(self.parent(), 'atualizar_dados'):
+                self.parent().atualizar_dados()
+        else:
+            QMessageBox.warning(
+                self, 
+                "Erro", 
+                resultado['message']
+            )
