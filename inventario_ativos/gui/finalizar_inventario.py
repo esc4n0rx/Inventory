@@ -121,45 +121,20 @@ class FinalizarInventarioDialog(QDialog):
         
         layout.addWidget(group_origem)
         
-        # Resumo agrupado por tipo de ativo
+        # Resumo por tipo de ativo (cada tipo em sua própria tabela)
         group_tipo = QGroupBox("Resumo por Tipo de Ativo")
         tipo_layout = QVBoxLayout(group_tipo)
         
-        # Sub-grupo: HB (623 e 618)
-        group_hb = QGroupBox("HB (623 e 618)")
-        hb_layout = QVBoxLayout(group_hb)
-        
-        self.tabela_hb = QTableWidget(0, 3)
-        self.tabela_hb.setHorizontalHeaderLabels(["Origem", "Quantidade", "Porcentagem"])
-        self.tabela_hb.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.tabela_hb.verticalHeader().setVisible(False)
-        hb_layout.addWidget(self.tabela_hb)
-        
-        tipo_layout.addWidget(group_hb)
-        
-        # Sub-grupo: HNT (G e P)
-        group_hnt = QGroupBox("HNT (G e P)")
-        hnt_layout = QVBoxLayout(group_hnt)
-        
-        self.tabela_hnt = QTableWidget(0, 3)
-        self.tabela_hnt.setHorizontalHeaderLabels(["Origem", "Quantidade", "Porcentagem"])
-        self.tabela_hnt.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.tabela_hnt.verticalHeader().setVisible(False)
-        hnt_layout.addWidget(self.tabela_hnt)
-        
-        tipo_layout.addWidget(group_hnt)
-        
-        # Sub-grupo: Outros
-        group_outros = QGroupBox("Outros Ativos")
-        outros_layout = QVBoxLayout(group_outros)
-        
-        self.tabela_outros = QTableWidget(0, 3)
-        self.tabela_outros.setHorizontalHeaderLabels(["Tipo", "Quantidade", "Porcentagem"])
-        self.tabela_outros.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.tabela_outros.verticalHeader().setVisible(False)
-        outros_layout.addWidget(self.tabela_outros)
-        
-        tipo_layout.addWidget(group_outros)
+        # Tabela para todos os tipos em colunas separadas
+        self.tabela_resumo_tipo = QTableWidget(0, 8)
+        self.tabela_resumo_tipo.setHorizontalHeaderLabels([
+            "Origem", "HB 623", "HB 618", "HNT G", "HNT P", 
+            "Chocolate", "BIN", "Pallets PBR"
+        ])
+        self.tabela_resumo_tipo.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tabela_resumo_tipo.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.tabela_resumo_tipo.verticalHeader().setVisible(False)
+        tipo_layout.addWidget(self.tabela_resumo_tipo)
         
         layout.addWidget(group_tipo)
     
@@ -382,120 +357,72 @@ class FinalizarInventarioDialog(QDialog):
             self.tabela_resumo_origem.setItem(i, 8, total_item)
     
     def _carregar_resumo_por_tipo(self, totais):
-        """Carrega as tabelas de resumo por tipo de ativo"""
-        # Calcular totais agrupados
-        total_geral = totais.get('total_geral', 0) or 0
+        """Carrega a tabela de resumo por tipo de ativo com cada tipo em sua própria coluna"""
+        # Limpar a tabela
+        self.tabela_resumo_tipo.setRowCount(0)
         
-        # Calcular total HB (623 + 618)
-        total_hb = (totais.get('total_hb_623', 0) or 0) + (totais.get('total_hb_618', 0) or 0)
+        # Lista de origens para adicionar à tabela
+        origens = [
+            "CD SP",
+            "CD ES",
+            "CD RJ",
+            "Lojas",
+            "Trânsito SP",
+            "Trânsito ES",
+            "Trânsito RJ",
+            "Fornecedor",
+            "TOTAL"
+        ]
         
-        # Calcular total HNT (G + P)
-        total_hnt = (totais.get('total_hnt_g', 0) or 0) + (totais.get('total_hnt_p', 0) or 0)
+        # Lista de tipos de caixas
+        tipos_caixa = [
+            'hb_623', 'hb_618', 'hnt_g', 'hnt_p', 
+            'chocolate', 'bin', 'pallets_pbr'
+        ]
         
-        # Calcular total Outros
-        total_outros = (totais.get('total_chocolate', 0) or 0) + (totais.get('total_bin', 0) or 0) + (totais.get('total_pallets_pbr', 0) or 0)
+        # Mapeamento de prefixos para origens
+        prefixos = {
+            "CD SP": "cd_sp_",
+            "CD ES": "cd_es_",
+            "CD RJ": "cd_rj_",
+            "Lojas": "lojas_",
+            "Trânsito SP": "transito_sp_",
+            "Trânsito ES": "transito_es_",
+            "Trânsito RJ": "transito_rj_",
+            "Fornecedor": "fornecedor_",
+            "TOTAL": "total_"
+        }
         
-        # Verificar que o total geral é não-zero para cálculos percentuais
-        if total_geral == 0:
-            total_geral = 1  # Evitar divisão por zero
-        
-        # Carregar tabela HB
-        self.tabela_hb.setRowCount(0)
-        
-        # Adicionar linha para CD SP
-        self._adicionar_linha_tipo(self.tabela_hb, "CD SP", 
-                               (totais.get('cd_sp_hb_623', 0) or 0) + (totais.get('cd_sp_hb_618', 0) or 0),
-                               total_hb)
-        
-        # Adicionar linha para CD ES
-        # Adicionar linha para CD ES
-        self._adicionar_linha_tipo(self.tabela_hb, "CD ES", 
-                               (totais.get('cd_es_hb_623', 0) or 0) + (totais.get('cd_es_hb_618', 0) or 0),
-                               total_hb)
-        
-        # Adicionar linha para CD RJ
-        self._adicionar_linha_tipo(self.tabela_hb, "CD RJ", 
-                               (totais.get('cd_rj_hb_623', 0) or 0) + (totais.get('cd_rj_hb_618', 0) or 0),
-                               total_hb)
-        
-        # Adicionar linha para Lojas
-        self._adicionar_linha_tipo(self.tabela_hb, "Lojas", 
-                               (totais.get('lojas_hb_623', 0) or 0) + (totais.get('lojas_hb_618', 0) or 0),
-                               total_hb)
-        
-        # Adicionar linha para Trânsito
-        self._adicionar_linha_tipo(self.tabela_hb, "Trânsito", 
-                               (totais.get('transito_sp_hb_623', 0) or 0) + (totais.get('transito_sp_hb_618', 0) or 0) +
-                               (totais.get('transito_es_hb_623', 0) or 0) + (totais.get('transito_es_hb_618', 0) or 0) +
-                               (totais.get('transito_rj_hb_623', 0) or 0) + (totais.get('transito_rj_hb_618', 0) or 0),
-                               total_hb)
-                               
-        # Adicionar linha para Fornecedor
-        self._adicionar_linha_tipo(self.tabela_hb, "Fornecedor", 
-                               (totais.get('fornecedor_hb_623', 0) or 0) + (totais.get('fornecedor_hb_618', 0) or 0),
-                               total_hb)
-        
-        # Adicionar linha para Total
-        self._adicionar_linha_tipo(self.tabela_hb, "TOTAL", total_hb, total_hb, True)
-        
-        # Carregar tabela HNT
-        self.tabela_hnt.setRowCount(0)
-        
-        # Adicionar linha para CD SP
-        self._adicionar_linha_tipo(self.tabela_hnt, "CD SP", 
-                               (totais.get('cd_sp_hnt_g', 0) or 0) + (totais.get('cd_sp_hnt_p', 0) or 0),
-                               total_hnt)
-        
-        # Adicionar linha para CD ES
-        self._adicionar_linha_tipo(self.tabela_hnt, "CD ES", 
-                               (totais.get('cd_es_hnt_g', 0) or 0) + (totais.get('cd_es_hnt_p', 0) or 0),
-                               total_hnt)
-        
-        # Adicionar linha para CD RJ
-        self._adicionar_linha_tipo(self.tabela_hnt, "CD RJ", 
-                               (totais.get('cd_rj_hnt_g', 0) or 0) + (totais.get('cd_rj_hnt_p', 0) or 0),
-                               total_hnt)
-        
-        # Adicionar linha para Lojas
-        self._adicionar_linha_tipo(self.tabela_hnt, "Lojas", 
-                               (totais.get('lojas_hnt_g', 0) or 0) + (totais.get('lojas_hnt_p', 0) or 0),
-                               total_hnt)
-        
-        # Adicionar linha para Trânsito
-        self._adicionar_linha_tipo(self.tabela_hnt, "Trânsito", 
-                               (totais.get('transito_sp_hnt_g', 0) or 0) + (totais.get('transito_sp_hnt_p', 0) or 0) +
-                               (totais.get('transito_es_hnt_g', 0) or 0) + (totais.get('transito_es_hnt_p', 0) or 0) +
-                               (totais.get('transito_rj_hnt_g', 0) or 0) + (totais.get('transito_rj_hnt_p', 0) or 0),
-                               total_hnt)
-                               
-        # Adicionar linha para Fornecedor
-        self._adicionar_linha_tipo(self.tabela_hnt, "Fornecedor", 
-                               (totais.get('fornecedor_hnt_g', 0) or 0) + (totais.get('fornecedor_hnt_p', 0) or 0),
-                               total_hnt)
-        
-        # Adicionar linha para Total
-        self._adicionar_linha_tipo(self.tabela_hnt, "TOTAL", total_hnt, total_hnt, True)
-        
-        # Carregar tabela Outros
-        self.tabela_outros.setRowCount(0)
-        
-        # Adicionar linha para Chocolate
-        self._adicionar_linha_tipo(self.tabela_outros, "Chocolate", 
-                               totais.get('total_chocolate', 0) or 0,
-                               total_outros)
-        
-        # Adicionar linha para BIN
-        self._adicionar_linha_tipo(self.tabela_outros, "BIN", 
-                               totais.get('total_bin', 0) or 0,
-                               total_outros)
-        
-        # Adicionar linha para Pallets PBR
-        self._adicionar_linha_tipo(self.tabela_outros, "Pallets PBR", 
-                               totais.get('total_pallets_pbr', 0) or 0,
-                               total_outros)
-        
-        # Adicionar linha para Total
-        self._adicionar_linha_tipo(self.tabela_outros, "TOTAL", total_outros, total_outros, True)
+        # Adicionar cada origem à tabela
+        for i, origem in enumerate(origens):
+            self.tabela_resumo_tipo.insertRow(i)
+            
+            # Nome da origem
+            nome_item = QTableWidgetItem(origem)
+            if origem == "TOTAL":
+                fonte = nome_item.font()
+                fonte.setBold(True)
+                nome_item.setFont(fonte)
+            self.tabela_resumo_tipo.setItem(i, 0, nome_item)
+            
+            # Adicionar valores para cada tipo de caixa
+            for j, tipo in enumerate(tipos_caixa):
+                prefixo = prefixos[origem]
+                chave = f"{prefixo}{tipo}"
+                valor = totais.get(chave, 0) or 0
+                
+                # Criar item com valor formatado
+                valor_item = QTableWidgetItem(str(valor))
+                valor_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                
+                # Destacar linha de totais
+                if origem == "TOTAL":
+                    fonte = valor_item.font()
+                    fonte.setBold(True)
+                    valor_item.setFont(fonte)
+                
+                # Adicionar à tabela
+                self.tabela_resumo_tipo.setItem(i, j+1, valor_item)
     
     def _adicionar_linha_tipo(self, tabela, nome, valor, total, negrito=False):
         """Adiciona uma linha nas tabelas de tipo"""
@@ -724,6 +651,17 @@ class FinalizarInventarioDialog(QDialog):
             ''', (self.cod_inventario,))
             
             lojas = cursor.fetchall()
+
+        # Mapeamento de totais por tipo
+        totais_tipo = {
+            'caixa_hb_623': 0,
+            'caixa_hb_618': 0,
+            'caixa_hnt_g': 0,
+            'caixa_hnt_p': 0,
+            'caixa_chocolate': 0,
+            'caixa_bin': 0,
+            'pallets_pbr': 0
+        }
         
         # Adicionar cada loja à tabela
         for loja in lojas:
@@ -742,11 +680,6 @@ class FinalizarInventarioDialog(QDialog):
                 status = loja['status']
             
             item_nome = QTableWidgetItem(nome_loja)
-            if status == 'finalizado':
-                item_nome.setForeground(QColor(0, 128, 0))  # Verde para finalizado
-                fonte = item_nome.font()
-                fonte.setBold(True)
-                item_nome = QTableWidgetItem(nome_loja)
             if status == 'finalizado':
                 item_nome.setForeground(QColor(0, 128, 0))  # Verde para finalizado
                 fonte = item_nome.font()
@@ -771,7 +704,17 @@ class FinalizarInventarioDialog(QDialog):
                 else:
                     valor = loja[tipo] or 0
                 
+                # Converter para inteiro garantindo que é um número
+                try:
+                    valor = int(valor)
+                except:
+                    valor = 0
+                
+                # Adicionar ao total da loja
                 total_loja += valor
+                
+                # Adicionar ao total por tipo
+                totais_tipo[tipo] += valor
                 
                 valor_item = QTableWidgetItem(str(valor))
                 valor_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -781,6 +724,39 @@ class FinalizarInventarioDialog(QDialog):
             total_item = QTableWidgetItem(str(total_loja))
             total_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.tabela_lojas.setItem(row, 8, total_item)
+            
+        # Adicionar linha de totais no final
+        row = self.tabela_lojas.rowCount()
+        if row > 0:  # Só adiciona se tiver pelo menos uma loja
+            self.tabela_lojas.insertRow(row)
+            
+            # Célula do título "TOTAL"
+            total_label = QTableWidgetItem("TOTAL")
+            fonte = total_label.font()
+            fonte.setBold(True)
+            total_label.setFont(fonte)
+            self.tabela_lojas.setItem(row, 0, total_label)
+            
+            # Células de totais por tipo
+            grand_total = 0
+            for j, tipo in enumerate(tipos):
+                valor_tipo = totais_tipo[tipo]
+                grand_total += valor_tipo
+                
+                total_tipo_item = QTableWidgetItem(str(valor_tipo))
+                total_tipo_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                fonte = total_tipo_item.font()
+                fonte.setBold(True)
+                total_tipo_item.setFont(fonte)
+                self.tabela_lojas.setItem(row, j + 1, total_tipo_item)
+            
+            # Total geral
+            grand_total_item = QTableWidgetItem(str(grand_total))
+            grand_total_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            fonte = grand_total_item.font()
+            fonte.setBold(True)
+            grand_total_item.setFont(fonte)
+            self.tabela_lojas.setItem(row, 8, grand_total_item)
     
     def filtrar_lojas(self):
         """Filtra a tabela de lojas pelo texto digitado"""
@@ -1255,6 +1231,34 @@ class FinalizarInventarioDialog(QDialog):
             ws_tipo.write(linha_excel, 1, "Quantidade", cabecalho_format)
             ws_tipo.write(linha_excel, 2, "Porcentagem", cabecalho_format)
             linha_excel += 1
+            
+            group_outros = QGroupBox("Outros Ativos")
+            outros_layout = QVBoxLayout(group_outros)
+            
+            self.tabela_outros = QTableWidget(0, 3)
+            self.tabela_outros.setHorizontalHeaderLabels(["Tipo", "Quantidade", "Porcentagem"])
+            self.tabela_outros.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+            self.tabela_outros.verticalHeader().setVisible(False)
+            outros_layout.addWidget(self.tabela_outros)
+            
+            group_hnt = QGroupBox("HNT (G e P)")
+            hnt_layout = QVBoxLayout(group_hnt)
+            
+            self.tabela_hnt = QTableWidget(0, 3)
+            self.tabela_hnt.setHorizontalHeaderLabels(["Origem", "Quantidade", "Porcentagem"])
+            self.tabela_hnt.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+            self.tabela_hnt.verticalHeader().setVisible(False)
+            hnt_layout.addWidget(self.tabela_hnt)
+
+
+            group_hb = QGroupBox("HB (623 e 618)")
+            hb_layout = QVBoxLayout(group_hb)
+
+            self.tabela_hb = QTableWidget(0, 3)
+            self.tabela_hb.setHorizontalHeaderLabels(["Origem", "Quantidade", "Porcentagem"])
+            self.tabela_hb.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+            self.tabela_hb.verticalHeader().setVisible(False)
+            hb_layout.addWidget(self.tabela_hb)
             
             # Dados HB
             for row in range(self.tabela_hb.rowCount()):

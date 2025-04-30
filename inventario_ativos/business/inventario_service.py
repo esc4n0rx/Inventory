@@ -101,9 +101,25 @@ class InventarioService:
             }
         
         try:
+            # Normalizar o tipo de caixa para garantir consistência
+            # Lista de tipos de caixas padrão
+            tipos_caixa_padrao = [
+                'hb_623', 'hb_618', 'hnt_g', 'hnt_p', 
+                'chocolate', 'bin', 'pallets_pbr'
+            ]
+            
+            # Verificar se o tipo está na lista de padrões
+            tipo_caixa_normalizado = tipo_caixa
+            if tipo_caixa not in tipos_caixa_padrao:
+                # Se não for um dos tipos padrão, encontrar o mais próximo
+                tipo_caixa_normalizado = tipo_caixa.lower().replace(' ', '_')
+                # Se ainda não corresponder a nenhum padrão, usar 'bin' como fallback
+                if tipo_caixa_normalizado not in tipos_caixa_padrao:
+                    print(f"Aviso: Tipo de caixa não padrão: {tipo_caixa}, usando {tipo_caixa_normalizado}")
+            
             dados = {
                 'tipo_fornecedor': tipo_fornecedor,
-                'tipo_caixa': tipo_caixa,
+                'tipo_caixa': tipo_caixa_normalizado,
                 'quantidade': int(quantidade)
             }
             
@@ -296,11 +312,27 @@ class InventarioService:
             # Mapear o tipo de trânsito para o formato adequado para o banco de dados
             # Agora separamos por origem: Trânsito SP, Trânsito ES, Trânsito RJ
             
+            # Normalizar o tipo de caixa para garantir consistência
+            # Lista de tipos de caixas padrão
+            tipos_caixa_padrao = [
+                'hb_623', 'hb_618', 'hnt_g', 'hnt_p', 
+                'chocolate', 'bin', 'pallets_pbr'
+            ]
+            
+            # Verificar se o tipo está na lista de padrões
+            tipo_caixa_normalizado = tipo_caixa
+            if tipo_caixa not in tipos_caixa_padrao:
+                # Se não for um dos tipos padrão, encontrar o mais próximo
+                tipo_caixa_normalizado = tipo_caixa.lower().replace(' ', '_')
+                # Se ainda não corresponder a nenhum padrão, usar 'bin' como fallback
+                if tipo_caixa_normalizado not in tipos_caixa_padrao:
+                    print(f"Aviso: Tipo de caixa não padrão: {tipo_caixa}, usando {tipo_caixa_normalizado}")
+            
             # Preparar os dados para inserção
             dados_transito = {
                 'setor': tipo_transito,  # Usamos o tipo exato que foi selecionado
                 'data': datetime.datetime.now().isoformat(),
-                'tipo_caixa': tipo_caixa,
+                'tipo_caixa': tipo_caixa_normalizado,
                 'quantidade': quantidade,
                 'usuario': 'sistema'
             }

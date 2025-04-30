@@ -99,7 +99,22 @@ class RegionalProgressWidget(QWidget):
         regionais_cd = []
         
         for regional in dados_regionais:
-            if regional.get('regional') == 'CENTRO_DISTRIBUICAO':
+            # Verificar se temos um dicionário válido
+            if not isinstance(regional, dict):
+                print(f"Aviso: elemento não é um dicionário: {regional}")
+                continue
+                
+            regional_name = regional.get('regional', '')
+            if not regional_name:
+                print(f"Aviso: regional sem nome: {regional}")
+                continue
+                
+            # Verificar dados mínimos necessários
+            if 'total_lojas' not in regional or 'lojas_finalizadas' not in regional:
+                print(f"Aviso: regional com dados incompletos: {regional}")
+                continue
+                
+            if regional_name == 'CENTRO_DISTRIBUICAO':
                 regionais_cd.append(regional)
             else:
                 regionais_normais.append(regional)
@@ -441,25 +456,52 @@ class DistribuicaoWidget(QWidget):
     
     def atualizar_dados(self, totais):
         """Atualiza o gráfico com dados de distribuição por origem"""
+        # Verificar se temos dados válidos
+        if not totais:
+            print("Aviso: Dados inválidos para o gráfico de distribuição")
+            return
+            
         # Criar série para o gráfico de pizza
         series = QPieSeries()
         
         # Adicionar fatias para cada origem
+        # Calcular o total dos CDs somando os 3 CDs
+        total_cd = (totais.get('total_cd_sp', 0) or 0) + (totais.get('total_cd_es', 0) or 0) + (totais.get('total_cd_rj', 0) or 0)
+        
+        # Se não temos total de CDs, verificar se existe um total_cd geral
+        if total_cd == 0 and 'total_cd' in totais:
+            total_cd = totais['total_cd']
+        
         # Modificado para separar os dados de trânsito por origem
         origens = {
-            'Lojas': totais['total_lojas'],
-            'CDs': totais['total_cd'],
-            'Trânsito SP': totais.get('total_transito_sp', 0),
-            'Trânsito ES': totais.get('total_transito_es', 0),
-            'Trânsito RJ': totais.get('total_transito_rj', 0),
-            'Fornecedor': totais['total_fornecedor']
+            'Lojas': totais.get('total_lojas', 0) or 0,
+            'CDs': total_cd,
+            'Trânsito SP': totais.get('total_transito_sp', 0) or 0,
+            'Trânsito ES': totais.get('total_transito_es', 0) or 0,
+            'Trânsito RJ': totais.get('total_transito_rj', 0) or 0,
+            'Fornecedor': totais.get('total_fornecedor', 0) or 0
         }
         
         # Remover origens com valor zero
         origens = {k: v for k, v in origens.items() if v > 0}
         
+        # Se não há valores positivos, mostrar mensagem
+        if not origens:
+            # Criar gráfico vazio com mensagem
+            chart = QChart()
+            chart.setTitle("Sem dados de distribuição")
+            self.chart_view.setChart(chart)
+            return
+            
         # Calcular porcentagens
-        total_geral = totais['total_geral'] if totais['total_geral'] > 0 else 1
+        total_geral = totais.get('total_geral', 0) or 0
+        if total_geral == 0:
+            # Se total_geral não está disponível, calculamos a partir das origens
+            total_geral = sum(origens.values())
+        
+        # Se ainda for zero, definir como 1 para evitar divisão por zero
+        if total_geral == 0:
+            total_geral = 1
         
         # Cores personalizadas para cada origem
         cores = {
@@ -572,84 +614,126 @@ class DashboardWidget(QWidget):
     
     def atualizar_cards(self, dados):
         """Atualiza os cards de informação com os dados do inventário"""
+        # Verificar se os dados são válidos
+        if not dados or 'status' not in dados:
+            print("Aviso: Dados inválidos para atualizar_cards")
+            return
+            
         # Card de lojas
-        total_lojas = dados['status']['total_lojas']
-        lojas_finalizadas = dados['status']['lojas_finalizadas']
+        total_lojas = dados['status'].get('total_lojas', 0)
+        lojas_finalizadas = dados['status'].get('lojas_finalizadas', 0)
         
         self.card_lojas.findChild(QLabel, "", Qt.FindDirectChildrenOnly).setText("Lojas Contadas")
         valor_lojas = self.card_lojas.findChildren(QLabel)[1]
         valor_lojas.setText(str(lojas_finalizadas))
         
         subtitulo_lojas = self.card_lojas.findChildren(QLabel)[2]
-        subtitulo_lojas.setText(f"de {total_lojas} ({dados['status']['porcentagem_lojas']:.1f}%)")
+        porcentagem_lojas = dados['status'].get('porcentagem_lojas', 0)
+        subtitulo_lojas.setText(f"de {total_lojas} ({porcentagem_lojas:.1f}%)")
         
         # Card de setores do CD
-        total_setores = dados['status']['total_setores']
-        setores_finalizados = dados['status']['setores_finalizados']
+        total_setores = dados['status'].get('total_setores', 0)
+        setores_finalizados = dados['status'].get('setores_finalizados', 0)
         
         self.card_cd.findChild(QLabel, "", Qt.FindDirectChildrenOnly).setText("Setores do CD")
         valor_cd = self.card_cd.findChildren(QLabel)[1]
         valor_cd.setText(str(setores_finalizados))
         
         subtitulo_cd = self.card_cd.findChildren(QLabel)[2]
-        subtitulo_cd.setText(f"de {total_setores} ({dados['status']['porcentagem_setores']:.1f}%)")
+        porcentagem_setores = dados['status'].get('porcentagem_setores', 0)
+        subtitulo_cd.setText(f"de {total_setores} ({porcentagem_setores:.1f}%)")
         
         # Card de total de ativos
         self.card_total.findChild(QLabel, "", Qt.FindDirectChildrenOnly).setText("Total de Ativos")
         valor_total = self.card_total.findChildren(QLabel)[1]
-        valor_total.setText(str(dados['totais']['total_geral']))
+        
+        # Usar total_geral do dicionário de totais, se existir
+        total_geral = 0
+        if 'totais' in dados and dados['totais']:
+            total_geral = dados['totais'].get('total_geral', 0)
+        valor_total.setText(str(total_geral))
         
         subtitulo_total = self.card_total.findChildren(QLabel)[2]
         subtitulo_total.setText("unidades")
     
     def atualizar_dados(self, cod_inventario):
         """Atualiza todos os componentes do dashboard com os dados do inventário"""
-        # Obter dados do dashboard
-        dados = self.relatorio_service.get_dados_dashboard(cod_inventario)
-        
-        # Processar os dados de trânsito para separar por origem
-        # Adicionar totais separados para cada origem de trânsito
-        totais = dados['totais']
-        
-        # Inicializar os novos totais de trânsito
-        totais['total_transito_sp'] = 0
-        totais['total_transito_es'] = 0
-        totais['total_transito_rj'] = 0
-        
-        # Obter detalhes de trânsito por tipo (se disponíveis)
-        # Nota: isso requer que o relatorio_service retorne esses dados
-        if 'dados_transito' in dados:
-            for item in dados['dados_transito']:
-                setor = item.get('setor', '').upper()
-                quantidade = item.get('total', 0)
+        if not cod_inventario:
+            print("Aviso: atualizar_dados chamado com cod_inventario vazio")
+            return
+            
+        try:
+            # Obter dados do dashboard
+            dados = self.relatorio_service.get_dados_dashboard(cod_inventario)
+            
+            # Verificar se os dados são válidos
+            if not dados:
+                print("Aviso: get_dados_dashboard retornou None")
+                return
                 
-                if 'TRÂNSITO SP' in setor or 'TRANSITO SP' in setor:
-                    totais['total_transito_sp'] += quantidade
-                elif 'TRÂNSITO ES' in setor or 'TRANSITO ES' in setor:
-                    totais['total_transito_es'] += quantidade
-                elif 'TRÂNSITO RJ' in setor or 'TRANSITO RJ' in setor:
-                    totais['total_transito_rj'] += quantidade
-        
-        # Atualizar cards
-        self.atualizar_cards(dados)
-        
-        # Atualizar progresso por regional
-        self.regional_progress.atualizar_dados(dados['status']['resumo_regional'])
-        
-        # Atualizar lojas pendentes
-        lojas_pendentes = {}
-        for regional in dados['status']['resumo_regional']:
-            if regional['lojas_pendentes']:
-                # Agrupar CDs em uma categoria especial
-                if regional['regional'] == 'CENTRO_DISTRIBUICAO':
-                    lojas_pendentes['CENTRO_DISTRIBUICAO'] = regional['lojas_pendentes']
-                else:
-                    lojas_pendentes[regional['regional']] = regional['lojas_pendentes']
-        
-        self.lojas_pendentes.atualizar_dados(lojas_pendentes)
-        
-        # Atualizar gráfico de comparação
-        self.comparacao_widget.atualizar_dados(dados['comparacao'])
-        
-        # Atualizar gráfico de distribuição com os dados processados
-        self.distribuicao_widget.atualizar_dados(totais)
+            # Processar os dados de trânsito para separar por origem
+            # Adicionar totais separados para cada origem de trânsito
+            totais = dados.get('totais', {})
+            
+            # Verificar se os totais são válidos
+            if not totais:
+                print("Aviso: Dicionário de totais vazio")
+                # Tente obter os totais diretamente
+                totais = self.relatorio_service.get_totais_por_tipo(cod_inventario)
+                if not totais:
+                    print("Aviso: Não foi possível obter totais")
+                    return
+                dados['totais'] = totais
+            
+            # Inicializar valores mínimos necessários no dicionário de totais para evitar KeyError
+            for chave in ['total_lojas', 'total_geral', 'total_fornecedor',
+                        'total_transito_sp', 'total_transito_es', 'total_transito_rj',
+                        'total_cd_sp', 'total_cd_es', 'total_cd_rj']:
+                if chave not in totais:
+                    totais[chave] = 0
+            
+            # Obter detalhes de trânsito por tipo (se disponíveis)
+            # Calcular totais de trânsito por origem específica se necessário
+            if 'detalhes' in dados and 'transito' in dados['detalhes']:
+                for item in dados['detalhes']['transito']:
+                    setor = item.get('setor', '').upper()
+                    tipo = item.get('tipo_caixa', '')
+                    quantidade = item.get('total', 0)
+                    
+                    # Normalizar o tipo
+                    if tipo and tipo in ['hb_623', 'hb_618', 'hnt_g', 'hnt_p', 'chocolate', 'bin', 'pallets_pbr']:
+                        if 'SP' in setor:
+                            totais[f'transito_sp_{tipo}'] = quantidade
+                        elif 'ES' in setor:
+                            totais[f'transito_es_{tipo}'] = quantidade
+                        elif 'RJ' in setor:
+                            totais[f'transito_rj_{tipo}'] = quantidade
+            
+            # Atualizar cards
+            self.atualizar_cards(dados)
+            
+            # Atualizar progresso por regional
+            self.regional_progress.atualizar_dados(dados['status'].get('resumo_regional', []))
+            
+            # Atualizar lojas pendentes
+            lojas_pendentes = {}
+            for regional in dados['status'].get('resumo_regional', []):
+                if regional.get('lojas_pendentes'):
+                    # Agrupar CDs em uma categoria especial
+                    if regional.get('regional') == 'CENTRO_DISTRIBUICAO':
+                        lojas_pendentes['CENTRO_DISTRIBUICAO'] = regional['lojas_pendentes']
+                    else:
+                        lojas_pendentes[regional.get('regional', '')] = regional['lojas_pendentes']
+            
+            self.lojas_pendentes.atualizar_dados(lojas_pendentes)
+            
+            # Atualizar gráfico de comparação
+            self.comparacao_widget.atualizar_dados(dados.get('comparacao'))
+            
+            # Atualizar gráfico de distribuição com os dados processados
+            self.distribuicao_widget.atualizar_dados(totais)
+            
+        except Exception as e:
+            import traceback
+            print(f"Erro ao atualizar dados do dashboard: {e}")
+            print(traceback.format_exc())
