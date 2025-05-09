@@ -303,8 +303,10 @@ class LojasPendentesWidget(QWidget):
             for loja in lojas:
                 # Ícone especial para CDs
                 prefix = "🏢 " if "CD " in loja else ""
+
+                nome_loja = loja.decode('utf-8') if isinstance(loja, bytes) else loja
                 
-                loja_label = QLabel(f"{prefix}{loja}")
+                loja_label = QLabel(f"{prefix}{nome_loja}")
                 
                 # Estilo especial para CDs
                 if "CD " in loja:

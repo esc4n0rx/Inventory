@@ -628,16 +628,14 @@ class FinalizarInventarioDialog(QDialog):
             total_item.setFont(fonte)
             tabela.setItem(row, col, total_item)
     
+
     def _carregar_detalhes_lojas(self, dados):
         """Carrega os detalhes das lojas na tabela"""
         # Limpar a tabela
         self.tabela_lojas.setRowCount(0)
         
-        # Verificar se há detalhes disponíveis
-        if 'detalhes' in dados and 'lojas' in dados['detalhes']:
-            lojas = dados['detalhes']['lojas']
-        else:
-            # Fallback para consulta direta ao banco de dados
+        try:
+            # Obter conexão para consulta direta ao banco de dados
             conn = self.inventario_service.db_manager.get_connection()
             cursor = conn.cursor()
             
@@ -651,112 +649,142 @@ class FinalizarInventarioDialog(QDialog):
             ''', (self.cod_inventario,))
             
             lojas = cursor.fetchall()
-
-        # Mapeamento de totais por tipo
-        totais_tipo = {
-            'caixa_hb_623': 0,
-            'caixa_hb_618': 0,
-            'caixa_hnt_g': 0,
-            'caixa_hnt_p': 0,
-            'caixa_chocolate': 0,
-            'caixa_bin': 0,
-            'pallets_pbr': 0
-        }
-        
-        # Adicionar cada loja à tabela
-        for loja in lojas:
-            if isinstance(loja, dict) and loja.get('loja', '').startswith('CD '):
-                continue  # Ignorar os CDs na lista de lojas
+            print(f"Encontradas {len(lojas)} lojas no banco para o inventário {self.cod_inventario}")
+            
+            # Mapeamento de totais por tipo
+            totais_tipo = {
+                'caixa_hb_623': 0,
+                'caixa_hb_618': 0,
+                'caixa_hnt_g': 0,
+                'caixa_hnt_p': 0,
+                'caixa_chocolate': 0,
+                'caixa_bin': 0,
+                'pallets_pbr': 0
+            }
+            
+            # Adicionar cada loja à tabela
+            for loja in lojas:
+                row = self.tabela_lojas.rowCount()
+                self.tabela_lojas.insertRow(row)
                 
-            row = self.tabela_lojas.rowCount()
-            self.tabela_lojas.insertRow(row)
-            
-            # Nome da loja (e status)
-            if isinstance(loja, dict):
-                nome_loja = loja.get('loja', '')
-                status = loja.get('status', '')
-            else:
-                nome_loja = loja['loja']
-                status = loja['status']
-            
-            item_nome = QTableWidgetItem(nome_loja)
-            if status == 'finalizado':
-                item_nome.setForeground(QColor(0, 128, 0))  # Verde para finalizado
-                fonte = item_nome.font()
-                fonte.setBold(True)
-                item_nome.setFont(fonte)
-            else:
-                item_nome.setForeground(QColor(255, 0, 0))  # Vermelho para pendente
-            
-            self.tabela_lojas.setItem(row, 0, item_nome)
-            
-            # Valores por tipo
-            tipos = ['caixa_hb_623', 'caixa_hb_618', 'caixa_hnt_g', 'caixa_hnt_p', 
-                    'caixa_chocolate', 'caixa_bin', 'pallets_pbr']
-            
-            total_loja = 0
-            for j, tipo in enumerate(tipos):
-                # Verificar se estamos trabalhando com um dicionário (da API) ou um objeto Row (do banco)
-                if isinstance(loja, dict):
-                    # Para dicionários, usamos o nome curto do tipo
-                    tipo_curto = tipo.replace('caixa_', '')
-                    valor = loja.get(tipo, loja.get(tipo_curto, 0)) or 0
-                else:
-                    valor = loja[tipo] or 0
-                
-                # Converter para inteiro garantindo que é um número
+                # Nome da loja (e status)
                 try:
-                    valor = int(valor)
+                    nome_loja = loja['loja']
+                    status = loja['status']
                 except:
-                    valor = 0
+                    # Fallback para acesso de dicionário ou outro tipo
+                    try:
+                        nome_loja = loja.get('loja', "Sem nome")
+                        status = loja.get('status', "pendente")
+                    except:
+                        # Último fallback para acesso por índice ou atributo
+                        try:
+                            nome_loja = getattr(loja, 'loja', "Sem nome")
+                            status = getattr(loja, 'status', "pendente")
+                        except:
+                            nome_loja = "Erro ao ler nome"
+                            status = "pendente"
                 
-                # Adicionar ao total da loja
-                total_loja += valor
+                item_nome = QTableWidgetItem(nome_loja)
+                if status == 'finalizado':
+                    item_nome.setForeground(QColor(0, 128, 0))  # Verde para finalizado
+                    fonte = item_nome.font()
+                    fonte.setBold(True)
+                    item_nome.setFont(fonte)
+                else:
+                    item_nome.setForeground(QColor(255, 0, 0))  # Vermelho para pendente
                 
-                # Adicionar ao total por tipo
-                totais_tipo[tipo] += valor
+                self.tabela_lojas.setItem(row, 0, item_nome)
                 
-                valor_item = QTableWidgetItem(str(valor))
-                valor_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                self.tabela_lojas.setItem(row, j + 1, valor_item)
-            
-            # Total da loja
-            total_item = QTableWidgetItem(str(total_loja))
-            total_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            self.tabela_lojas.setItem(row, 8, total_item)
-            
-        # Adicionar linha de totais no final
-        row = self.tabela_lojas.rowCount()
-        if row > 0:  # Só adiciona se tiver pelo menos uma loja
-            self.tabela_lojas.insertRow(row)
-            
-            # Célula do título "TOTAL"
-            total_label = QTableWidgetItem("TOTAL")
-            fonte = total_label.font()
-            fonte.setBold(True)
-            total_label.setFont(fonte)
-            self.tabela_lojas.setItem(row, 0, total_label)
-            
-            # Células de totais por tipo
-            grand_total = 0
-            for j, tipo in enumerate(tipos):
-                valor_tipo = totais_tipo[tipo]
-                grand_total += valor_tipo
+                # Valores por tipo
+                tipos = ['caixa_hb_623', 'caixa_hb_618', 'caixa_hnt_g', 'caixa_hnt_p', 
+                        'caixa_chocolate', 'caixa_bin', 'pallets_pbr']
                 
-                total_tipo_item = QTableWidgetItem(str(valor_tipo))
-                total_tipo_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                fonte = total_tipo_item.font()
+                total_loja = 0
+                for j, tipo in enumerate(tipos):
+                    # Tentar obter o valor de várias maneiras
+                    try:
+                        # Primeiro tenta acesso por índice de dicionário
+                        valor = loja[tipo]
+                    except:
+                        try:
+                            # Tenta acesso por método get
+                            valor = loja.get(tipo, 0)
+                        except:
+                            try:
+                                # Tenta acesso por atributo
+                                valor = getattr(loja, tipo, 0)
+                            except:
+                                # Finalmente, simplesmente usar zero
+                                valor = 0
+                    
+                    # Converter para inteiro independente do tipo
+                    try:
+                        valor_int = int(valor or 0)
+                    except (ValueError, TypeError):
+                        valor_int = 0
+                    
+                    # Adicionar ao total da loja
+                    total_loja += valor_int
+                    
+                    # Adicionar ao total por tipo
+                    totais_tipo[tipo] += valor_int
+                    
+                    # Criar item para a tabela
+                    valor_item = QTableWidgetItem(str(valor_int))
+                    valor_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    self.tabela_lojas.setItem(row, j + 1, valor_item)
+                
+                # Total da loja
+                total_item = QTableWidgetItem(str(total_loja))
+                total_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                self.tabela_lojas.setItem(row, 8, total_item)
+            
+            # Adicionar linha de totais no final
+            row = self.tabela_lojas.rowCount()
+            if row > 0:  # Só adiciona se tiver pelo menos uma loja
+                self.tabela_lojas.insertRow(row)
+                
+                # Célula do título "TOTAL"
+                total_label = QTableWidgetItem("TOTAL")
+                fonte = total_label.font()
                 fonte.setBold(True)
-                total_tipo_item.setFont(fonte)
-                self.tabela_lojas.setItem(row, j + 1, total_tipo_item)
+                total_label.setFont(fonte)
+                self.tabela_lojas.setItem(row, 0, total_label)
+                
+                # Células de totais por tipo
+                grand_total = 0
+                for j, tipo in enumerate(tipos):
+                    valor_tipo = totais_tipo[tipo]
+                    grand_total += valor_tipo
+                    
+                    total_tipo_item = QTableWidgetItem(str(valor_tipo))
+                    total_tipo_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    fonte = total_tipo_item.font()
+                    fonte.setBold(True)
+                    total_tipo_item.setFont(fonte)
+                    self.tabela_lojas.setItem(row, j + 1, total_tipo_item)
+                
+                # Total geral
+                grand_total_item = QTableWidgetItem(str(grand_total))
+                grand_total_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                fonte = grand_total_item.font()
+                fonte.setBold(True)
+                grand_total_item.setFont(fonte)
+                self.tabela_lojas.setItem(row, 8, grand_total_item)
+                
+        except Exception as e:
+            # Em caso de erro, mostrar a mensagem de erro e adicionar uma linha de aviso
+            import traceback
+            print(f"Erro ao carregar detalhes das lojas: {e}")
+            print(traceback.format_exc())
             
-            # Total geral
-            grand_total_item = QTableWidgetItem(str(grand_total))
-            grand_total_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            fonte = grand_total_item.font()
-            fonte.setBold(True)
-            grand_total_item.setFont(fonte)
-            self.tabela_lojas.setItem(row, 8, grand_total_item)
+            # Adicionar linha de aviso na tabela
+            self.tabela_lojas.setRowCount(1)
+            erro_item = QTableWidgetItem(f"Erro ao carregar lojas: {str(e)}")
+            erro_item.setForeground(QColor(255, 0, 0))  # Vermelho
+            self.tabela_lojas.setItem(0, 0, erro_item)
+            self.tabela_lojas.setSpan(0, 0, 1, 9)  # Ocupar toda a linha
     
     def filtrar_lojas(self):
         """Filtra a tabela de lojas pelo texto digitado"""
@@ -1208,7 +1236,7 @@ class FinalizarInventarioDialog(QDialog):
                             try:
                                 valor = int(item.text())
                                 ws_lojas.write(row + 3, col, valor, normal_format)
-                            except:
+                            except (ValueError, TypeError):
                                 ws_lojas.write(row + 3, col, item.text(), normal_format)
             
             # Ajustar largura das colunas

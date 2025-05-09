@@ -80,7 +80,7 @@ class CSVManager:
         
         lojas = []
         try:
-            with open(self.csv_lojas_path, mode='r', encoding='utf-8') as file:
+            with open(self.csv_lojas_path, mode='r', encoding='utf-8-sig') as file:  # Changed to utf-8-sig
                 reader = csv.DictReader(file)
                 for row in reader:
                     # Garantir que loja e regional existam e não sejam vazios

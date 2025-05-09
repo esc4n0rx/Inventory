@@ -1,0 +1,17 @@
+id,setor,data,caixa_hb_623,caixa_hb_618,caixa_hnt_g,caixa_hnt_p,caixa_chocolate,caixa_bin,pallets_pbr,status,usuario
+11,Mercearia,Sat Apr 05 2025 10:35:02 GMT-0300 (GMT-03:00),0,0,483,163,0,0,0,finalizado,rafa.morais
+12,Mercearia-DP02,Sat Apr 05 2025 10:35:45 GMT-0300 (GMT-03:00),0,0,16,7,0,0,0,finalizado,rafa.morais
+13,Pereciveis-CAM1,Sat Apr 05 2025 10:36:47 GMT-0300 (GMT-03:00),224,0,5,4,0,0,0,finalizado,rafa.morais
+14,Produção-CAM7,Thu Aug 24 2023 22:18:19 GMT-0300 (GMT-03:00),831,0,0,0,0,0,0,finalizado,ricardo
+15,Produção-CAM5,Thu Aug 24 2023 22:27:46 GMT-0300 (GMT-03:00),581,0,0,0,0,0,0,finalizado,ricardo
+16,Produção-CAM5,Thu Aug 24 2023 22:46:24 GMT-0300 (GMT-03:00),811,0,0,0,0,1,0,finalizado,ricardo
+17,Central-Produção-Estoque,Thu Aug 24 2023 23:24:28 GMT-0300 (GMT-03:00),682,0,2,0,0,0,0,finalizado,ricardo
+18,Central-Produção-Estoque,Thu Aug 24 2023 23:38:20 GMT-0300 (GMT-03:00),155,0,0,0,0,1,0,finalizado,ricardo
+19,Produção-CAM5,Thu Aug 24 2023 23:39:53 GMT-0300 (GMT-03:00),188,0,0,0,0,0,0,finalizado,ricardo
+20,FLV-EstoqueSeco,Fri May 31 2024 18:28:39 GMT-0300 (GMT-03:00),873,17,0,120,0,13,0,finalizado,seco1
+21,FLV-EstoqueFrio,Fri May 31 2024 18:29:53 GMT-0300 (GMT-03:00),5,75,1,75,0,0,0,finalizado,seco1
+22,FLV-EstoqueFrio,Fri May 31 2024 18:29:54 GMT-0300 (GMT-03:00),5,75,1,75,0,0,0,finalizado,seco1
+23,FLV-Separação,Fri May 31 2024 18:31:40 GMT-0300 (GMT-03:00),2351,2433,156,1027,0,0,0,finalizado,seco1
+24,FLV-Reversa,Fri May 31 2024 18:33:25 GMT-0300 (GMT-03:00),1381,2805,154,29,0,0,0,finalizado,seco1
+25,BlocadoES,Fri May 31 2024 18:35:00 GMT-0300 (GMT-03:00),491,1714,0,1510,0,0,0,finalizado,seco1
+26,BlocadoSP,Fri May 31 2024 18:36:55 GMT-0300 (GMT-03:00),1394,455,9,0,0,5,0,finalizado,seco1

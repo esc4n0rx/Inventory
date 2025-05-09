@@ -1,0 +1,7 @@
+id,setor,data,tipo_caixa,quantidade,usuario,created_at,updated_at
+1,CD SP,Sun Apr 06 2025 00:00:00 GMT-0300 (GMT-03:00),CAIXA HB 623,1130,cibele.ramos@hortifruti.com.br,Sun Apr 06 2025 17:49:33 GMT-0300 (GMT-03:00),Sun Apr 06 2025 17:49:33 GMT-0300 (GMT-03:00)
+2,CD SP,Sun Apr 06 2025 00:00:00 GMT-0300 (GMT-03:00),CAIXA HB 618,131,cibele.ramos@hortifruti.com.br,Sun Apr 06 2025 17:49:33 GMT-0300 (GMT-03:00),Sun Apr 06 2025 17:49:33 GMT-0300 (GMT-03:00)
+3,CD SP,Sun Apr 06 2025 00:00:00 GMT-0300 (GMT-03:00),CAIXA HNT G,0,cibele.ramos@hortifruti.com.br,Sun Apr 06 2025 17:49:33 GMT-0300 (GMT-03:00),Sun Apr 06 2025 17:49:33 GMT-0300 (GMT-03:00)
+4,CD SP,Sun Apr 06 2025 00:00:00 GMT-0300 (GMT-03:00),CAIXA HNT P,16,cibele.ramos@hortifruti.com.br,Sun Apr 06 2025 17:49:33 GMT-0300 (GMT-03:00),Sun Apr 06 2025 17:49:33 GMT-0300 (GMT-03:00)
+5,CD SP,Sun Apr 06 2025 00:00:00 GMT-0300 (GMT-03:00),CAIXA CHOCOLATE,0,cibele.ramos@hortifruti.com.br,Sun Apr 06 2025 17:49:34 GMT-0300 (GMT-03:00),Sun Apr 06 2025 17:49:34 GMT-0300 (GMT-03:00)
+6,CD SP,Sun Apr 06 2025 00:00:00 GMT-0300 (GMT-03:00),CAIXA BIN,8,cibele.ramos@hortifruti.com.br,Sun Apr 06 2025 17:49:34 GMT-0300 (GMT-03:00),Sun Apr 06 2025 17:49:34 GMT-0300 (GMT-03:00)
